@@ -1583,7 +1583,7 @@ TECHNICAL NOTES:
                 </div>
                 <div>
                   <div className="text-xs font-black tracking-widest text-white uppercase font-display">QUESTIONS GENERATOR</div>
-                  <div className="text-[9px] text-[#64748b] font-mono tracking-wider font-bold">Q LABS · SWIFT OPS</div>
+                  <div className="text-[9px] text-[#64748b] font-mono tracking-wider font-bold">Q LABS</div>
                 </div>
               </div>
               <div className="flex items-center gap-3">
