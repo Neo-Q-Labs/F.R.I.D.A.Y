@@ -1678,7 +1678,7 @@ TECHNICAL NOTES:
             {/* Sidebar — 5 nav items (bolt→home, generate, tracks, planner, settings) */}
             <div className="w-14 bg-[#090d18] border-r border-white/[0.06] flex flex-col items-center py-4 gap-1.5 shrink-0 select-none">
 
-              {/* 1 · QLabs bolt logo → Home / Dashboard */}
+              {/* 1 · Dashboard */}
               <button
                 onClick={() => setCurrentPage('dashboard')}
                 className={cn(
@@ -1687,12 +1687,9 @@ TECHNICAL NOTES:
                     ? "bg-blue-600 text-white"
                     : "text-slate-600 hover:text-white hover:bg-white/5"
                 )}
-                title="Home"
+                title="Dashboard"
               >
-                <svg viewBox="0 0 128 210" className="w-4 h-6" aria-hidden="true">
-                  <path d="M74 6 L30 112 L60 112 L46 202 L98 84 L66 84 Z"
-                    fill={currentPage === 'dashboard' ? 'white' : 'currentColor'} />
-                </svg>
+                <LayoutDashboard size={16} />
               </button>
 
               <div className="w-6 h-[1px] bg-slate-200/60 dark:bg-slate-800/60" />
