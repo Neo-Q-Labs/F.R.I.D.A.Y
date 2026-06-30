@@ -75,6 +75,7 @@ import { PlannerPage } from './components/PlannerPage';
 import { PlannerView } from './components/PlannerView';
 import { ContentWeb } from './components/ContentWeb';
 import { CursorTrail } from './components/CursorTrail';
+import VantaBackground from './components/VantaBackground';
 
 
 
@@ -1551,7 +1552,8 @@ TECHNICAL NOTES:
   const displayedPage = isLoggedIn ? currentPage : 'login';
 
   return (
-    <div className="w-screen h-screen overflow-hidden text-foreground bg-background flex flex-col font-sans select-none relative">
+    <div className="w-screen h-screen overflow-hidden text-foreground flex flex-col font-sans select-none relative">
+      <VantaBackground theme={theme} />
       <CursorTrail />
       
       {/* Dynamic Toast Alerts Renderer */}
@@ -1574,7 +1576,7 @@ TECHNICAL NOTES:
         
         {/* Page 1: Auth Screen (Full Custom Render inside SPA) */}
         {displayedPage === 'login' && (
-          <div className="flex-1 bg-[#0e0101] bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:18px_18px] flex flex-col overflow-y-auto">
+          <div className="flex-1 flex flex-col overflow-y-auto">
             {/* Login Header brand */}
             <div className="h-14 border-b border-white/5 bg-[#0e0101] px-6 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
@@ -1676,7 +1678,7 @@ TECHNICAL NOTES:
           <div className="flex-1 flex overflow-hidden">
             
             {/* Sidebar — 5 nav items (bolt→home, generate, tracks, planner, settings) */}
-            <div className="w-14 bg-[#110101] border-r border-white/[0.06] flex flex-col items-center py-4 gap-1.5 shrink-0 select-none">
+            <div className="w-14 bg-black/40 backdrop-blur-md border-r border-white/[0.06] flex flex-col items-center py-4 gap-1.5 shrink-0 select-none">
 
               {/* 1 · Dashboard */}
               <button
@@ -1801,7 +1803,7 @@ TECHNICAL NOTES:
             </div>
 
             {/* Core Content Shell */}
-            <div className="flex-1 flex flex-col overflow-hidden bg-background text-foreground">
+            <div className="flex-1 flex flex-col overflow-hidden text-foreground">
               
               {/* Horizontal Topbar with brand IAMNEO logo and user capsule */}
               <div className="h-14 border-b border-white/[0.06] bg-[#110101] px-6 flex items-center justify-between shrink-0 select-none">
@@ -1943,9 +1945,9 @@ TECHNICAL NOTES:
                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest font-mono w-full text-left">OUTPUT MIX</p>
                         <div className="relative w-24 h-24 my-4">
                           <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                            <circle cx="50" cy="50" r="40" fill="none" stroke="#1e293b" strokeWidth="8"/>
-                            <circle cx="50" cy="50" r="40" fill="none" stroke="#3b82f6" strokeWidth="9" strokeDasharray="251" strokeDashoffset="75" strokeLinecap="round"/>
-                            <circle cx="50" cy="50" r="40" fill="none" stroke="#a855f7" strokeWidth="9" strokeDasharray="251" strokeDashoffset="170" strokeLinecap="round"/>
+                            <circle cx="50" cy="50" r="40" fill="none" stroke="#2a0808" strokeWidth="8"/>
+                            <circle cx="50" cy="50" r="40" fill="none" stroke="#e60a0a" strokeWidth="9" strokeDasharray="251" strokeDashoffset="75" strokeLinecap="round"/>
+                            <circle cx="50" cy="50" r="40" fill="none" stroke="#ff7c73" strokeWidth="9" strokeDasharray="251" strokeDashoffset="170" strokeLinecap="round"/>
                           </svg>
                           <div className="absolute inset-0 flex items-center justify-center">
                             <span className="text-xl font-black text-white">{generations.length}</span>
@@ -2320,7 +2322,7 @@ TECHNICAL NOTES:
                           className={cn(
                             "flex-1 py-1.5 px-3 text-[9px] font-black tracking-widest uppercase rounded-md cursor-pointer transition-colors whitespace-nowrap",
                             activeSettingsTab === tab.id
-                              ? "bg-indigo-600/10 text-indigo-600 dark:text-[#818cf8] border border-indigo-500/15 font-extrabold"
+                              ? "bg-indigo-600/10 text-indigo-600 dark:text-[#ff7c73] border border-indigo-500/15 font-extrabold"
                               : "text-slate-500 dark:text-gray-500 hover:text-slate-800 dark:hover:text-gray-350"
                           )}
                         >
@@ -3197,7 +3199,7 @@ TECHNICAL NOTES:
                               className={cn(
                                 "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold cursor-pointer transition-all leading-none",
                                 isSplitView 
-                                  ? "bg-indigo-600/15 border-indigo-500/30 text-indigo-600 dark:text-[#818cf8]"
+                                  ? "bg-indigo-600/15 border-indigo-500/30 text-indigo-600 dark:text-[#ff7c73]"
                                   : "bg-slate-50 dark:bg-[#120202] border-slate-200 dark:border-white/10 text-slate-650 dark:text-gray-450 hover:bg-slate-100 dark:hover:bg-white/5"
                               )}
                             >
@@ -3269,7 +3271,7 @@ TECHNICAL NOTES:
                                   }
                                 }
                               }}
-                              className="bg-indigo-600/10 dark:bg-blue-600/10 text-indigo-600 dark:text-[#818cf8] border border-indigo-500/25 dark:border-blue-500/25 hover:bg-indigo-600/15 dark:hover:bg-blue-600/15 rounded-lg px-3 py-1.5 text-[9px] font-black uppercase tracking-wider cursor-pointer font-sans transition-colors"
+                              className="bg-indigo-600/10 dark:bg-blue-600/10 text-indigo-600 dark:text-[#ff7c73] border border-indigo-500/25 dark:border-blue-500/25 hover:bg-indigo-600/15 dark:hover:bg-blue-600/15 rounded-lg px-3 py-1.5 text-[9px] font-black uppercase tracking-wider cursor-pointer font-sans transition-colors"
                             >
                               ↓ PDF (Badged)
                             </button>
@@ -3514,7 +3516,7 @@ TECHNICAL NOTES:
               exit={{ scale: 0.95, y: 15 }}
               className="w-full max-w-sm bg-white dark:bg-[#1e0505] border border-slate-200 dark:border-white/10 rounded-2xl shadow-xl overflow-hidden p-5"
             >
-              <h3 className="text-[10px] font-black tracking-widest text-indigo-600 dark:text-[#818cf8] uppercase mb-1 font-mono">
+              <h3 className="text-[10px] font-black tracking-widest text-indigo-600 dark:text-[#ff7c73] uppercase mb-1 font-mono">
                 {bankModalType === 'course' ? 'Create Course' : bankModalType === 'track' ? 'Create Track' : 'Create Category'}
               </h3>
               <h2 className="text-base font-extrabold text-slate-800 dark:text-white mb-3">

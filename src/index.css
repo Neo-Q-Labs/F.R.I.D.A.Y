@@ -30,18 +30,18 @@
   --color-indigo-900: #7a0404;
   --color-indigo-950: #450101;
 
-  /* ── Remap blue → F.R.I.D.A.Y Violet (#5e17eb anchor) ── */
-  --color-blue-50:  #f3eeff;
-  --color-blue-100: #e4d6ff;
-  --color-blue-200: #c9aeff;
-  --color-blue-300: #a97ff5;
-  --color-blue-400: #8b54f0;
-  --color-blue-500: #7528ee;
-  --color-blue-600: #5e17eb;
-  --color-blue-700: #4c12c4;
-  --color-blue-800: #3d0e9e;
-  --color-blue-900: #2f0b7a;
-  --color-blue-950: #1a0647;
+  /* ── Remap blue → same Red spectrum (keeps sidebar/buttons/charts all red) ── */
+  --color-blue-50:  #fff5f5;
+  --color-blue-100: #ffe0e0;
+  --color-blue-200: #ffbdbd;
+  --color-blue-300: #ff9090;
+  --color-blue-400: #ff7c73;
+  --color-blue-500: #f52020;
+  --color-blue-600: #e60a0a;
+  --color-blue-700: #c00808;
+  --color-blue-800: #9c0606;
+  --color-blue-900: #7a0404;
+  --color-blue-950: #450101;
 
   /* ── Brand tokens ── */
   --color-brand-primary:   #e60a0a;
@@ -67,14 +67,14 @@
   }
 
   .dark {
-    --background:       #0e0101;
+    --background:       transparent;
     --foreground:       #fff5f5;
-    --card:             #1a0404;
+    --card:             rgba(20,4,4,0.75);
     --card-foreground:  #fff5f5;
-    --border:           rgba(255,255,255,0.06);
-    --muted:            #200606;
-    --muted-foreground: #a8a29e;
-    --surface:          #1e0505;
+    --border:           rgba(230,10,10,0.14);
+    --muted:            rgba(40,8,8,0.80);
+    --muted-foreground: #c4a4a4;
+    --surface:          rgba(30,6,6,0.80);
   }
 }
 
@@ -107,22 +107,23 @@
     box-shadow: inset 0 0 20px rgba(230,10,10,0.06);
   }
 
-  /* Dark mode: deep red gradient with subtle grid — matches brand imagery */
+  /* Dark mode: premium red — strong corner glows, brand-matched */
   .mesh-gradient-dark {
-    background-color: #0e0101;
+    background-color: #120202;
     background-image:
-      radial-gradient(at 0%   0%,   rgba(230,10,10,0.22) 0px, transparent 55%),
-      radial-gradient(at 100% 0%,   rgba(192,8,8,0.16)   0px, transparent 50%),
-      radial-gradient(at 100% 100%, rgba(255,124,115,0.10) 0px, transparent 50%),
-      radial-gradient(at 0%   100%, rgba(94,23,235,0.08)  0px, transparent 50%);
+      radial-gradient(at 0%   0%,   rgba(230,10,10,0.40) 0px, transparent 50%),
+      radial-gradient(at 100% 0%,   rgba(192,8,8,0.28)   0px, transparent 50%),
+      radial-gradient(at 50%  40%,  rgba(255,60,60,0.06) 0px, transparent 55%),
+      radial-gradient(at 100% 100%, rgba(255,124,115,0.18) 0px, transparent 50%),
+      radial-gradient(at 0%   100%, rgba(94,23,235,0.06)  0px, transparent 45%);
   }
 
-  /* Light mode: very soft rose-white */
+  /* Light mode: warm rose-white with soft red tint */
   .mesh-gradient-light {
     background-color: #fff8f8;
     background-image:
-      radial-gradient(at 0%   0%, rgba(230,10,10,0.06)  0px, transparent 50%),
-      radial-gradient(at 100% 0%, rgba(255,124,115,0.04) 0px, transparent 50%);
+      radial-gradient(at 0%   0%, rgba(230,10,10,0.07)   0px, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(255,124,115,0.05)  0px, transparent 50%);
   }
 
   .bg-noise {
