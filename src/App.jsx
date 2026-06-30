@@ -1575,11 +1575,11 @@ TECHNICAL NOTES:
         
         {/* Page 1: Auth Screen (Full Custom Render inside SPA) */}
         {displayedPage === 'login' && (
-          <div className="flex-1 bg-[#060813] bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:18px_18px] flex flex-col overflow-y-auto">
+          <div className="flex-1 bg-[#f2f2f7] dark:bg-[#060813] dark:bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:18px_18px] flex flex-col overflow-y-auto">
             {/* Login Header brand */}
-            <div className="h-14 border-b border-white/5 bg-[#080b11] px-6 flex items-center justify-between shrink-0">
+            <div className="h-14 glass-topbar px-6 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
+                <div className="w-8 h-8 btn-coral-glass rounded-lg flex items-center justify-center">
                   <Zap size={14} className="text-white fill-white/20 animate-pulse" />
                 </div>
                 <div>
@@ -1591,7 +1591,7 @@ TECHNICAL NOTES:
                 {/* Theme Mode Toggle Button */}
                 <button
                   onClick={toggleTheme}
-                  className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors bg-[#0f172a] hover:bg-[#1e293b] border border-white/10 text-amber-400 cursor-pointer"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors bg-black/[0.04] dark:bg-[#0f172a] hover:bg-black/[0.08] dark:hover:bg-[#1e293b] border border-black/[0.06] dark:border-white/10 text-amber-500 dark:text-amber-400 cursor-pointer"
                   title="Switch Theme"
                 >
                   {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
@@ -1605,8 +1605,8 @@ TECHNICAL NOTES:
 
             {/* Login Center Column */}
             <div className="flex-1 flex items-center justify-center p-6">
-              <div className="w-full max-w-[450px] bg-[#0d1222] border border-slate-800 rounded-2xl p-9 shadow-2xl relative">
-                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 to-indigo-500 rounded-t-2xl" />
+              <div className="w-full max-w-[450px] glass-card rounded-2xl p-9 shadow-2xl relative">
+                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#eb6658] to-[rgba(235,102,88,0.55)] rounded-t-2xl" />
                 
                 <div className="text-[10px] font-mono text-slate-500 tracking-widest uppercase mb-1.5 flex items-center gap-2">
                   <span className="w-5 h-[1.5px] bg-blue-500/30 inline-block" />
@@ -1626,7 +1626,7 @@ TECHNICAL NOTES:
                     type="text" 
                     value={loginIdInput}
                     onChange={(e) => setLoginIdInput(e.target.value)}
-                    className="w-full bg-[#080b12] border border-slate-800 rounded-xl py-2.5 pl-10 pr-4 text-xs font-mono font-medium text-emerald-400 focus:outline-none focus:border-blue-500 transition-all shadow-inner"
+                    className="w-full glass-input rounded-xl py-2.5 pl-10 pr-4 text-xs font-mono font-medium text-emerald-400 focus:outline-none focus:border-blue-500 transition-all shadow-inner"
                     placeholder="neo10506"
                   />
                 </div>
@@ -1639,7 +1639,7 @@ TECHNICAL NOTES:
                     type="password" 
                     value={loginPasswordInput}
                     onChange={(e) => setLoginPasswordInput(e.target.value)}
-                    className="w-full bg-[#080b12] border border-slate-800 rounded-xl py-2.5 pl-10 pr-10 text-xs font-mono text-slate-300 focus:outline-none focus:border-blue-500 transition-all shadow-inner"
+                    className="w-full glass-input rounded-xl py-2.5 pl-10 pr-10 text-xs font-mono text-slate-300 focus:outline-none focus:border-blue-500 transition-all shadow-inner"
                     placeholder="••••••••"
                   />
                   <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer">
@@ -1651,7 +1651,7 @@ TECHNICAL NOTES:
                 <button 
                   onClick={handleLoginSubmit}
                   disabled={isLoggingIn}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl text-xs font-extrabold tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed shadow-lg shadow-blue-500/15"
+                  className="w-full btn-coral-glass text-white py-3 rounded-xl text-xs font-extrabold tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
                 >
                   {isLoggingIn ? (
                     <>
@@ -1677,7 +1677,7 @@ TECHNICAL NOTES:
           <div className="flex-1 flex overflow-hidden">
             
             {/* Sidebar — 5 nav items (bolt→home, generate, tracks, planner, settings) */}
-            <div className="w-14 bg-[#090d18] border-r border-white/[0.06] flex flex-col items-center py-4 gap-1.5 shrink-0 select-none">
+            <div className="w-14 glass-sidebar flex flex-col items-center py-4 gap-1.5 shrink-0 select-none">
 
               {/* 1 · QLabs bolt logo → Home / Dashboard */}
               <button
@@ -1806,7 +1806,7 @@ TECHNICAL NOTES:
             <div className="flex-1 flex flex-col overflow-hidden bg-background text-foreground">
               
               {/* Horizontal Topbar with brand IAMNEO logo and user capsule */}
-              <div className="h-14 border-b border-white/[0.06] bg-[#090d18] px-6 flex items-center justify-between shrink-0 select-none">
+              <div className="h-14 glass-topbar px-6 flex items-center justify-between shrink-0 select-none">
                 <div className="flex items-center gap-2.5">
                   <span className="w-2 h-2 rounded-full bg-[#10b981]" />
                   <span className="text-xs font-black tracking-widest text-slate-800 dark:text-white uppercase font-display">IAMNEO</span>
@@ -1849,26 +1849,26 @@ TECHNICAL NOTES:
                         <button onClick={() => { checkHealth(); fetchHistory(); showToast('Refreshed'); }} className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/[0.08] bg-transparent text-slate-400 hover:text-white hover:border-white/20 text-xs font-bold tracking-wider transition-all cursor-pointer">
                           <RefreshCw size={12} /><span>REFRESH</span>
                         </button>
-                        <button onClick={() => setCurrentPage('generate')} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-black tracking-wider transition-all cursor-pointer shadow-lg shadow-blue-500/20">
+                        <button onClick={() => setCurrentPage('generate')} className="flex items-center gap-2 px-4 py-2 rounded-xl btn-coral-glass text-white text-xs font-black tracking-wider transition-all cursor-pointer">
                           <Plus size={13} /><span>NEW GENERATION</span>
                         </button>
                       </div>
                     </div>
 
                     {/* Filter bar */}
-                    <div className="flex flex-wrap items-center gap-2 p-3 rounded-2xl bg-[#111827] border border-white/[0.06]">
-                      <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#0f172a] border border-white/[0.06]">
+                    <div className="flex flex-wrap items-center gap-2 p-3 rounded-2xl glass-card">
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-xl glass-panel">
                         <span className="text-[9px] font-black text-blue-400 font-mono uppercase tracking-widest">FROM</span>
                         <span className="text-xs text-white font-mono">dd/mm/yyyy</span>
                         <CalendarDays size={11} className="text-slate-600" />
                       </div>
                       <span className="text-slate-700 font-bold">→</span>
-                      <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#0f172a] border border-white/[0.06]">
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-xl glass-panel">
                         <span className="text-[9px] font-black text-blue-400 font-mono uppercase tracking-widest">TO</span>
                         <span className="text-xs text-white font-mono">dd/mm/yyyy</span>
                         <CalendarDays size={11} className="text-slate-600" />
                       </div>
-                      <div className="flex items-center gap-1 p-1 rounded-xl bg-[#0f172a] border border-white/[0.06]">
+                      <div className="flex items-center gap-1 p-1 rounded-xl glass-panel">
                         {['TW','14d','30d','90d'].map(r => {
                           const active = (inputs.selectedTimeRange || '30d') === r;
                           return (
@@ -1884,7 +1884,7 @@ TECHNICAL NOTES:
                           <RefreshCw size={11} />
                         </button>
                       </div>
-                      <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#0f172a] border border-white/[0.06] ml-auto">
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-xl glass-panel ml-auto">
                         <span className="text-[9px] font-black text-slate-500 font-mono uppercase tracking-widest">TYPE</span>
                         <select value={selectedType} onChange={e => setSelectedType(e.target.value)}
                           className="bg-transparent text-xs text-white outline-none cursor-pointer">
@@ -1909,7 +1909,7 @@ TECHNICAL NOTES:
                         { label: 'CONTENT BUNDLES', icon: <Database size={18} />, color: 'amber',
                           value: generations.length },
                       ].map(s => (
-                        <div key={s.label} className="p-5 rounded-2xl bg-[#111827] border border-white/[0.06] hover:-translate-y-0.5 transition-all">
+                        <div key={s.label} className="p-5 rounded-2xl glass-card hover:-translate-y-0.5 transition-all">
                           <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center',
                             s.color === 'blue'    ? 'bg-blue-500/15 text-blue-400' :
                             s.color === 'emerald' ? 'bg-emerald-500/15 text-emerald-400' :
@@ -1925,7 +1925,7 @@ TECHNICAL NOTES:
                     {/* Charts row */}
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
                       {/* Weekly Activity */}
-                      <div className="lg:col-span-6 p-5 rounded-2xl bg-[#111827] border border-white/[0.06]">
+                      <div className="lg:col-span-6 p-5 rounded-2xl glass-card">
                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest font-mono">WEEKLY ACTIVITY</p>
                         <div className="flex items-end justify-between h-28 gap-2 mt-6 px-1">
                           {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((day, i) => (
@@ -1941,7 +1941,7 @@ TECHNICAL NOTES:
                       </div>
 
                       {/* Output Mix */}
-                      <div className="lg:col-span-3 p-5 rounded-2xl bg-[#111827] border border-white/[0.06] flex flex-col items-center">
+                      <div className="lg:col-span-3 p-5 rounded-2xl glass-card flex flex-col items-center">
                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest font-mono w-full text-left">OUTPUT MIX</p>
                         <div className="relative w-24 h-24 my-4">
                           <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
@@ -1971,7 +1971,7 @@ TECHNICAL NOTES:
                       </div>
 
                       {/* Top Tracks */}
-                      <div className="lg:col-span-3 p-5 rounded-2xl bg-[#111827] border border-white/[0.06]">
+                      <div className="lg:col-span-3 p-5 rounded-2xl glass-card">
                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest font-mono">TOP TRACKS</p>
                         <div className="mt-4 space-y-3">
                           {['DSA','Java','Python','Java Full Stack','Cybersecurity','Data Analytics','Aptitude'].map(track => {
@@ -1992,7 +1992,7 @@ TECHNICAL NOTES:
                     </div>
 
                     {/* Recent Generations table */}
-                    <div className="rounded-2xl bg-[#111827] border border-white/[0.06] overflow-hidden">
+                    <div className="rounded-2xl glass-card overflow-hidden">
                       <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest font-mono">RECENT GENERATIONS</p>
                         <button onClick={() => showPage('contentbank')} className="text-[10px] font-black text-blue-400 hover:text-blue-300 uppercase tracking-widest cursor-pointer transition-colors">
@@ -2056,7 +2056,7 @@ TECHNICAL NOTES:
                       </div>
 
                       {/* Type tabs */}
-                      <div className="flex gap-1 p-1 rounded-xl bg-[#0f172a] border border-white/[0.06] w-fit">
+                      <div className="flex gap-1 p-1 rounded-xl glass-panel w-fit">
                         {[
                           ['questions', 'MCQ QUESTIONS'],
                           ['coding',    'CODING LOGIC'],
@@ -2075,7 +2075,7 @@ TECHNICAL NOTES:
                       </div>
 
                       {/* 00 / CLASSIFY AS */}
-                      <div className="p-5 rounded-2xl bg-[#111827] border border-white/[0.06] space-y-4">
+                      <div className="p-5 rounded-2xl glass-card space-y-4">
                         <p className="text-[9px] font-black text-slate-500 font-mono uppercase tracking-widest">
                           <span className="text-slate-700 mr-2">00 /</span> CLASSIFY AS
                         </p>
@@ -2089,7 +2089,7 @@ TECHNICAL NOTES:
                             <div key={label} className="space-y-1.5">
                               <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest font-mono">{label}</label>
                               <select value={value} onChange={e => setter(e.target.value)}
-                                className="w-full bg-[#0f172a] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white outline-none cursor-pointer focus:border-blue-500/40 transition-colors">
+                                className="w-full glass-input rounded-xl px-4 py-3 text-sm text-white outline-none cursor-pointer focus:border-blue-500/40 transition-colors">
                                 <option value="">Select {label.toLowerCase()}...</option>
                                 {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                               </select>
@@ -2099,7 +2099,7 @@ TECHNICAL NOTES:
                       </div>
 
                       {/* 01 / TOPIC */}
-                      <div className="p-5 rounded-2xl bg-[#111827] border border-white/[0.06] space-y-3">
+                      <div className="p-5 rounded-2xl glass-card space-y-3">
                         <div className="flex items-center justify-between">
                           <p className="text-[9px] font-black text-slate-500 font-mono uppercase tracking-widest">
                             <span className="text-slate-700 mr-2">01 /</span> TOPIC
@@ -2110,17 +2110,17 @@ TECHNICAL NOTES:
                           value={topic}
                           onChange={e => setTopic(e.target.value.slice(0, 80))}
                           placeholder="e.g. Binary Search Trees, Java Generics, Spring Boot..."
-                          className="w-full bg-[#0f172a] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder-slate-600 outline-none focus:border-blue-500/40 transition-colors"
+                          className="w-full glass-input rounded-xl px-4 py-3 text-sm text-white placeholder-slate-600 outline-none focus:border-blue-500/40 transition-colors"
                         />
                       </div>
 
                       {/* 02 / CONTEXT BRIEF */}
-                      <div className="p-5 rounded-2xl bg-[#111827] border border-white/[0.06] space-y-3">
+                      <div className="p-5 rounded-2xl glass-card space-y-3">
                         <div className="flex items-center justify-between">
                           <p className="text-[9px] font-black text-slate-500 font-mono uppercase tracking-widest">
                             <span className="text-slate-700 mr-2">02 /</span> CONTENT BRIEF
                           </p>
-                          <div className="flex gap-1 p-0.5 rounded-lg bg-[#0f172a] border border-white/[0.06]">
+                          <div className="flex gap-1 p-0.5 rounded-lg glass-panel">
                             {['TEXT','URL'].map((t, ti) => (
                               <button key={t} className={cn('px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest cursor-pointer transition-all',
                                 ti === 0 ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white'
@@ -2133,13 +2133,13 @@ TECHNICAL NOTES:
                           onChange={e => setAdditionalContext(e.target.value)}
                           rows={5}
                           placeholder="Describe focus areas, learning objectives, or any context for the questions..."
-                          className="w-full bg-[#0f172a] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder-slate-600 outline-none focus:border-blue-500/40 resize-none transition-colors"
+                          className="w-full glass-input rounded-xl px-4 py-3 text-sm text-white placeholder-slate-600 outline-none focus:border-blue-500/40 resize-none transition-colors"
                         />
                         <p className="text-[10px] text-slate-600 font-mono text-right">{additionalContext.length} chars</p>
                       </div>
 
                       {/* 03 / QUESTION SETTINGS */}
-                      <div className="p-5 rounded-2xl bg-[#111827] border border-white/[0.06] space-y-4">
+                      <div className="p-5 rounded-2xl glass-card space-y-4">
                         <p className="text-[9px] font-black text-slate-500 font-mono uppercase tracking-widest">
                           <span className="text-slate-700 mr-2">03 /</span> QUESTION SETTINGS
                         </p>
@@ -2154,7 +2154,7 @@ TECHNICAL NOTES:
                               max={20}
                               value={count}
                               onChange={e => setCount(Math.max(1, Math.min(20, parseInt(e.target.value) || 5)))}
-                              className="w-20 bg-[#0f172a] border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm text-white text-center outline-none focus:border-blue-500/40 transition-colors font-mono"
+                              className="w-20 glass-input rounded-xl px-3 py-2.5 text-sm text-white text-center outline-none focus:border-blue-500/40 transition-colors font-mono"
                             />
                             <div className="flex items-center gap-1.5">
                               {[5, 10, 15, 20].map(n => (
@@ -2162,7 +2162,7 @@ TECHNICAL NOTES:
                                   className={cn('w-9 h-9 rounded-lg text-xs font-black cursor-pointer transition-all',
                                     count === n
                                       ? 'bg-blue-600 text-white'
-                                      : 'bg-[#0f172a] border border-white/[0.06] text-slate-500 hover:text-white hover:bg-white/5'
+                                      : 'glass-panel text-slate-500 hover:text-white hover:bg-white/5'
                                   )}>
                                   {n}
                                 </button>
@@ -2206,7 +2206,7 @@ TECHNICAL NOTES:
                     {/* Right: Config panel */}
                     <div className="w-72 shrink-0 flex flex-col gap-4 overflow-y-auto">
                       {/* Tone Matrix */}
-                      <div className="p-5 rounded-2xl bg-[#111827] border border-white/[0.06] space-y-3">
+                      <div className="p-5 rounded-2xl glass-card space-y-3">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest font-mono flex items-center gap-2">
                           <BrainCircuit size={13} className="text-slate-500" /> TONE MATRIX
                         </p>
@@ -2214,14 +2214,14 @@ TECHNICAL NOTES:
                           {['Professional','Academic','Casual','Technical','Executive','Creative'].map(t => (
                             <button key={t} onClick={() => setActiveTone(t)}
                               className={cn('px-3 py-2.5 rounded-xl text-xs font-bold cursor-pointer transition-all',
-                                activeTone === t ? 'bg-blue-600 text-white' : 'bg-[#0f172a] text-slate-400 hover:text-white hover:bg-white/5'
+                                activeTone === t ? 'bg-blue-600 text-white' : 'bg-black/[0.04] dark:bg-[#0f172a] text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-black/[0.06] dark:hover:bg-white/5'
                               )}>{t}</button>
                           ))}
                         </div>
                       </div>
 
                       {/* Neural Engine */}
-                      <div className="p-5 rounded-2xl bg-[#111827] border border-white/[0.06] space-y-3">
+                      <div className="p-5 rounded-2xl glass-card space-y-3">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest font-mono flex items-center gap-2">
                           <Cpu size={13} className="text-slate-500" /> NEURAL ENGINE
                         </p>
@@ -2236,7 +2236,7 @@ TECHNICAL NOTES:
                               className={cn('w-full flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all text-left',
                                 engine === e.id
                                   ? 'bg-blue-600/15 border border-blue-500/30'
-                                  : 'bg-[#0f172a] border border-white/[0.05] hover:border-white/10'
+                                  : 'glass-panel hover:border-white/10'
                               )}>
                               <span className="text-base leading-none">{e.icon}</span>
                               <div className="flex-1 min-w-0">
@@ -2254,13 +2254,13 @@ TECHNICAL NOTES:
                       </div>
 
                       {/* Difficulty */}
-                      <div className="p-5 rounded-2xl bg-[#111827] border border-white/[0.06] space-y-3">
+                      <div className="p-5 rounded-2xl glass-card space-y-3">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest font-mono">DIFFICULTY</p>
                         <div className="flex gap-2">
                           {['Easy','Medium','Hard'].map(d => (
                             <button key={d} onClick={() => setDifficulty(d)}
                               className={cn('flex-1 py-2.5 rounded-xl text-xs font-bold cursor-pointer transition-all',
-                                difficulty === d ? 'bg-blue-600 text-white' : 'bg-[#0f172a] text-slate-400 hover:text-white hover:bg-white/5'
+                                difficulty === d ? 'bg-blue-600 text-white' : 'bg-black/[0.04] dark:bg-[#0f172a] text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-black/[0.06] dark:hover:bg-white/5'
                               )}>{d}</button>
                           ))}
                         </div>
@@ -2270,7 +2270,7 @@ TECHNICAL NOTES:
                       <button
                         onClick={handleGetMcpPrompt}
                         disabled={!topic.trim()}
-                        className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-[11px] tracking-widest uppercase cursor-pointer transition-all shadow-xl shadow-blue-500/20"
+                        className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl btn-coral-glass disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-[11px] tracking-widest uppercase cursor-pointer transition-all"
                       >
                         <Copy size={14} />
                         <span>GET MCP PROMPT</span>
