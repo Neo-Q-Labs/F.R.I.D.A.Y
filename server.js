@@ -825,7 +825,7 @@ RESPONSE FORMAT — return ONLY valid JSON, no markdown fences, no extra text:
           apiKey:       keyInfo.apiKey,
           systemPrompt: (isDbTrack ? DATABASE_CODING_SYSTEM_PROMPT : CODING_SYSTEM_PROMPT) + formatInstruction,
           userPrompt:   userPrompt,
-          maxTokens:    16000
+          maxTokens:    Math.min(16000, Math.max(5000, count * 1800))
         });
         const data = JSON.parse(rawContent);
         const questions = data.questions || [];
