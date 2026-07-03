@@ -148,31 +148,37 @@ Job ID: ${jobId}
 Generate exactly ${count} ${difficulty} MCQ questions about **"${topic}"** for the **${track}** track.
 Context: ${context}
 
-**Output format — return ONLY this JSON, no markdown fences:**
-\`\`\`json
+**MANDATORY VARIETY RULES — every question must test a DIFFERENT concept/subtopic:**
+- Rotate question types across the set: conceptual-understanding, code-output-tracing, error-spotting, best-practice-selection, API/syntax recall, comparison (X vs Y — when to use which)
+- For programming/technical tracks: embed short code snippets (≤ 12 lines) in at least 40% of questions — ask what it outputs, what the bug is, what fix is correct, or what the time complexity is
+- Cover breadth: pick ${count} distinct sub-concepts within "${topic}" — never repeat the same sub-concept in two questions
+
+**DISTRACTOR QUALITY RULES (non-negotiable):**
+- Every wrong option must be a real misconception, a common off-by-one error, a similar-but-different concept, or subtly wrong code — never obviously wrong
+- All 4 options must be the same form (all code snippets, OR all statements — never mix types within one question)
+- Difficulty calibration: Easy = direct recall/definition; Medium = application/output-tracing/consequence; Hard = edge cases, subtle bugs, expert tradeoffs, complex multi-step reasoning
+
+**Output format — return ONLY valid JSON, no markdown fences, no preamble:**
 {
   "questions": [
     {
-      "question": "Question text here",
+      "question": "Full question text. For code questions embed the snippet here using \\n for newlines.",
       "options": {
-        "A": "Option A",
-        "B": "Option B",
-        "C": "Option C",
-        "D": "Option D"
+        "A": "Option A — full text",
+        "B": "Option B — full text",
+        "C": "Option C — full text",
+        "D": "Option D — full text"
       },
-      "answer": "A",
-      "explanation": "Clear explanation of why A is correct and why others are wrong",
+      "answer": "B",
+      "explanation": "B is correct because [precise technical reason with example if helpful]. A is wrong because [specific technical reason]. C is wrong because [specific reason]. D is wrong because [specific reason].",
       "difficulty": "${difficulty}",
-      "tags": ["tag1", "tag2"]
+      "tags": ["sub-concept-1", "sub-concept-2"],
+      "type": "conceptual|code-output|error-spotting|best-practice|comparison|syntax-recall"
     }
   ]
 }
-\`\`\`
 
-Rules:
-- Test deep conceptual understanding, not memorization
-- All wrong options must be plausible
-- Return JSON immediately, no preamble
+**Explanation rule:** MUST address all 4 options — why the correct answer is right AND why each wrong option is wrong. Vague explanations ("A is incorrect") are not allowed.
 
 After generating the JSON, call **friday.save_questions** with jobId="${jobId}", type="${type}", track="${track}", course="${course}", client="${client}", difficulty="${difficulty}", and the questions JSON string to save to F.R.I.D.A.Y.`
           }]

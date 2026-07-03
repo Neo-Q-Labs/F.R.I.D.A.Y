@@ -130,6 +130,7 @@ export default function App() {
   // MCP prompt modal (copy-to-clipboard)
   const [mcpPromptModal, setMcpPromptModal] = useState(false);
   const [mcpPromptText, setMcpPromptText] = useState('');
+  const [mcpPromptEditing, setMcpPromptEditing] = useState(false);
   // Arcade modal
   const [arcadeOpen, setArcadeOpen] = useState(false);
   
@@ -734,6 +735,7 @@ TECHNICAL NOTES:
       lines.push(``, `Use this exact output format for every question:`, format);
     }
     setMcpPromptText(lines.join('\n'));
+    setMcpPromptEditing(false);
     setMcpPromptModal(true);
   };
 
@@ -763,6 +765,7 @@ TECHNICAL NOTES:
       `4. Call questai.save_planner with jobId, courseName, track, client, and the full planner JSON.`,
     ];
     setMcpPromptText(lines.join('\n'));
+    setMcpPromptEditing(false);
     setMcpPromptModal(true);
   };
 
@@ -2214,6 +2217,58 @@ TECHNICAL NOTES:
                                 )}>
                                 <p className="text-[10px] font-black uppercase tracking-wider">LeetCode Style</p>
                                 <p className="text-[9px] opacity-60 mt-0.5 font-mono">Numbered problems</p>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 04 / FORMAT TEMPLATE */}
+                      <div className="p-5 rounded-2xl glass-card space-y-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-[9px] font-black text-slate-500 font-mono uppercase tracking-widest">
+                            <span className="text-slate-700 mr-2">04 /</span> QUESTION FORMAT TEMPLATE
+                          </p>
+                          <button
+                            onClick={() => setShowFormatEditor(v => !v)}
+                            className="text-[9px] font-black text-slate-500 hover:text-blue-400 uppercase tracking-wider font-mono cursor-pointer transition-colors">
+                            {showFormatEditor ? 'COLLAPSE ↑' : 'EDIT ↓'}
+                          </button>
+                        </div>
+                        <p className="text-[9px] text-slate-600 font-mono leading-relaxed">
+                          Injected into every generation. Defines the exact structure AI must output.
+                          {!showFormatEditor && (
+                            <span className="ml-1 text-blue-500">
+                              ({trackFormats[getFormatKey(selectedTrack, selectedType)] ? 'custom template active' : 'using default template'})
+                            </span>
+                          )}
+                        </p>
+                        {showFormatEditor && (
+                          <div className="space-y-3">
+                            <textarea
+                              ref={formatTextareaRef}
+                              value={trackFormats[getFormatKey(selectedTrack, selectedType)] ?? getActiveFormat()}
+                              onChange={e => setTrackFormats(prev => ({ ...prev, [getFormatKey(selectedTrack, selectedType)]: e.target.value }))}
+                              rows={14}
+                              className="w-full glass-input rounded-xl px-4 py-3 text-[11px] text-slate-300 font-mono outline-none focus:border-blue-500/40 resize-y transition-colors leading-relaxed"
+                              spellCheck={false}
+                              placeholder="Define the output format Claude must follow for each question..."
+                            />
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={handleSaveFormat}
+                                disabled={isSavingFormat}
+                                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-400 text-[9px] font-black uppercase tracking-wider cursor-pointer hover:bg-blue-600/30 transition-all disabled:opacity-40">
+                                {isSavingFormat ? 'SAVING...' : 'SAVE TEMPLATE'}
+                              </button>
+                              <button
+                                onClick={() => setTrackFormats(prev => {
+                                  const next = { ...prev };
+                                  delete next[getFormatKey(selectedTrack, selectedType)];
+                                  return next;
+                                })}
+                                className="px-4 py-2 rounded-xl border border-white/[0.06] text-slate-500 hover:text-white text-[9px] font-black uppercase tracking-wider cursor-pointer transition-all">
+                                RESET TO DEFAULT
                               </button>
                             </div>
                           </div>
@@ -3812,19 +3867,43 @@ TECHNICAL NOTES:
                   <h2 className="text-sm font-black text-white">Copy &amp; paste into Claude Code tab</h2>
                 </div>
               </div>
-              <button onClick={() => setMcpPromptModal(false)}
-                className="w-8 h-8 rounded-lg border border-white/[0.08] text-slate-400 hover:text-white flex items-center justify-center cursor-pointer transition-colors">
-                <X size={14} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setMcpPromptEditing(v => !v)}
+                  className={cn('px-3 py-1.5 rounded-lg border text-[9px] font-black uppercase tracking-widest font-mono cursor-pointer transition-all',
+                    mcpPromptEditing
+                      ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
+                      : 'border-white/[0.08] text-slate-400 hover:text-white'
+                  )}>
+                  {mcpPromptEditing ? 'PREVIEW' : 'EDIT'}
+                </button>
+                <button onClick={() => setMcpPromptModal(false)}
+                  className="w-8 h-8 rounded-lg border border-white/[0.08] text-slate-400 hover:text-white flex items-center justify-center cursor-pointer transition-colors">
+                  <X size={14} />
+                </button>
+              </div>
             </div>
 
-            {/* Prompt box */}
+            {/* Prompt box — view or edit mode */}
             <div className="px-6 py-4">
               <div className="relative rounded-2xl bg-[#0a0f1e] border border-white/[0.06] overflow-hidden">
-                <pre className="text-[11px] text-slate-300 font-mono p-4 overflow-x-auto whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto">{mcpPromptText}</pre>
+                {mcpPromptEditing ? (
+                  <textarea
+                    value={mcpPromptText}
+                    onChange={e => setMcpPromptText(e.target.value)}
+                    rows={14}
+                    className="w-full bg-transparent text-[11px] text-amber-200 font-mono p-4 outline-none resize-y leading-relaxed"
+                    spellCheck={false}
+                    autoFocus
+                  />
+                ) : (
+                  <pre className="text-[11px] text-slate-300 font-mono p-4 overflow-x-auto whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto">{mcpPromptText}</pre>
+                )}
               </div>
               <p className="text-[9px] text-slate-600 font-mono mt-2">
-                Tip: paste this into Claude Code tab → Claude calls F.R.I.D.A.Y tools → questions appear in your course card.
+                {mcpPromptEditing
+                  ? 'Editing mode — changes apply only to this copy. Click PREVIEW to review.'
+                  : 'Tip: paste this into Claude Code tab → Claude calls F.R.I.D.A.Y tools → questions appear in your course card.'}
               </p>
             </div>
 
