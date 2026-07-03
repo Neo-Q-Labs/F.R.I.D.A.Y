@@ -717,7 +717,7 @@ TECHNICAL NOTES:
     const type = generationMode === 'coding' ? 'coding' : 'mcq';
     const format = getActiveFormat();
     const lines = [
-      `Use questai generate_questions with these parameters:`,
+      `Use questai.generate_questions with these parameters:`,
       `  topic: "${topic}"`,
       `  type: ${type}`,
       `  count: ${count}`,
@@ -815,13 +815,33 @@ TECHNICAL NOTES:
   };
 
 
+  // Maps Neural Engine selection → actual provider string.
+  // auto_route picks the first provider with a saved BYOK key (priority order),
+  // then falls back to 'groq' which always has a server-side key.
+  const resolveEngine = () => {
+    if (engine === 'auto_route') {
+      const priority = ['groq', 'nvidia', 'openai', 'gemini', 'anthropic', 'mistral', 'deepseek'];
+      return priority.find(p => userApiKeys[p]) || 'groq';
+    }
+    const direct = { groq: 'groq', nvidia: 'nvidia', openai: 'openai' };
+    return direct[engine] ?? activeProvider;
+  };
+
   const handleGenerate = async () => {
     if (!topic.trim()) {
       showToast('Enter a topic first!', true);
       return;
     }
+    // Resolve which provider/model this generation will actually use
+    const engProvider = resolveEngine();
+    const engModel    = userApiModels[engProvider] || (engProvider === activeProvider ? activeModel : '');
+    // Guard: non-groq providers have no server fallback — require BYOK
+    if (engProvider !== 'groq' && !userApiKeys[engProvider]) {
+      showToast(`No ${engProvider.toUpperCase()} key saved — add it in Settings → API Keys`, true);
+      return;
+    }
     setState('generating');
-    setOverlayMsg('Connecting to AI engine...');
+    setOverlayMsg(`Connecting to ${engProvider.toUpperCase()} engine...`);
     
     // Update subtext slightly with animation simulation
     setTimeout(() => {
@@ -839,8 +859,8 @@ TECHNICAL NOTES:
         tone: activeTone,
         additionalContext: additionalContext.trim(),
         customFormat: getActiveFormat(),
-        provider: activeProvider,
-        model:    activeModel
+        provider: engProvider,
+        model:    engModel
       };
       let questions = [];
       if (selectedType === 'coding') {
@@ -2226,10 +2246,26 @@ TECHNICAL NOTES:
                         </p>
                         <div className="space-y-2">
                           {[
-                            { id: 'auto_route', label: 'AUTO_ROUTE', sub: 'Smart provider selection',   icon: '⚡' },
-                            { id: 'nvidia',     label: 'NVIDIA_NIM', sub: 'High-throughput inference',   icon: '🟢' },
-                            { id: 'groq',       label: 'GROQ_INFER', sub: 'Ultra-fast generation',       icon: '🟡' },
-                            { id: 'openai',     label: 'GPT-4o',      sub: 'Highest quality',             icon: '🔵' },
+                            {
+                              id: 'auto_route', label: 'AUTO_ROUTE', icon: '⚡',
+                              sub: `Smart selection → ${resolveEngine().toUpperCase()}`,
+                              ready: true
+                            },
+                            {
+                              id: 'nvidia', label: 'NVIDIA_NIM', icon: '🟢',
+                              sub: userApiKeys.nvidia ? 'your key active' : 'add key in Settings',
+                              ready: !!userApiKeys.nvidia
+                            },
+                            {
+                              id: 'groq', label: 'GROQ_INFER', icon: '🟡',
+                              sub: userApiKeys.groq ? 'your key active' : 'server key active',
+                              ready: true
+                            },
+                            {
+                              id: 'openai', label: 'GPT-4o', icon: '🔵',
+                              sub: userApiKeys.openai ? 'your key active' : 'add key in Settings',
+                              ready: !!userApiKeys.openai
+                            },
                           ].map(e => (
                             <button key={e.id} onClick={() => setEngine(e.id)}
                               className={cn('w-full flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all text-left',
@@ -2240,13 +2276,16 @@ TECHNICAL NOTES:
                               <span className="text-base leading-none">{e.icon}</span>
                               <div className="flex-1 min-w-0">
                                 <p className={cn('text-[10px] font-black uppercase tracking-wider', engine === e.id ? 'text-blue-400' : 'text-white')}>{e.label}</p>
-                                <p className="text-[9px] text-slate-500 mt-0.5">{e.sub}</p>
+                                <p className="text-[9px] mt-0.5" style={{ color: e.ready ? '#22c55e' : '#f59e0b' }}>{e.sub}</p>
                               </div>
-                              {engine === e.id && (
-                                <div className="w-4 h-4 rounded-full border-2 border-blue-400 flex items-center justify-center shrink-0">
-                                  <div className="w-2 h-2 rounded-full bg-blue-400" />
-                                </div>
-                              )}
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className={cn('w-1.5 h-1.5 rounded-full', e.ready ? 'bg-emerald-500' : 'bg-amber-400')} />
+                                {engine === e.id && (
+                                  <div className="w-4 h-4 rounded-full border-2 border-blue-400 flex items-center justify-center">
+                                    <div className="w-2 h-2 rounded-full bg-blue-400" />
+                                  </div>
+                                )}
+                              </div>
                             </button>
                           ))}
                         </div>
@@ -2274,6 +2313,19 @@ TECHNICAL NOTES:
                         <Copy size={14} />
                         <span>GET MCP PROMPT</span>
                       </button>
+
+                      {/* Active engine status badge */}
+                      <div className="flex items-center justify-between px-1">
+                        <span className="text-[9px] font-mono text-foreground/40 uppercase tracking-wider">
+                          {engine === 'auto_route' ? `AUTO → ${resolveEngine().toUpperCase()}` : engine.replace('_',' ').toUpperCase()}
+                        </span>
+                        <span className={cn('flex items-center gap-1.5 text-[9px] font-mono',
+                          userApiKeys[resolveEngine()] ? 'text-emerald-500' : resolveEngine() === 'groq' ? 'text-amber-400' : 'text-red-400'
+                        )}>
+                          <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                          {userApiKeys[resolveEngine()] ? 'your key' : resolveEngine() === 'groq' ? 'server key' : 'no key — add in Settings'}
+                        </span>
+                      </div>
 
                       {/* Generate via API (secondary) */}
                       <button
