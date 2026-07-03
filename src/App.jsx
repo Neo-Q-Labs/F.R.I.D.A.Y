@@ -2539,23 +2539,8 @@ TECHNICAL NOTES:
                     {/* ── API Provider (BYOK) ─────────────────────────────────── */}
                     {activeSettingsTab === 'api' && (
                         <div className="glass-card rounded-3xl border border-white/5 p-6 space-y-5 relative overflow-hidden">
-                          {/* Coming Soon overlay */}
-                          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center backdrop-blur-sm bg-[#090d18]/70 rounded-3xl gap-4">
-                            <div className="w-16 h-16 rounded-3xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center">
-                              <Lock size={28} className="text-yellow-400" />
-                            </div>
-                            <div className="text-center space-y-1">
-                              <p className="text-white font-black text-xl tracking-tight">Coming Soon</p>
-                              <p className="text-[11px] text-slate-400 font-mono uppercase tracking-widest">BYOK API Integration</p>
-                              <p className="text-[10px] text-slate-500 mt-2 max-w-xs leading-relaxed">Custom API key support is under development. The platform currently uses secure server-side keys with automatic provider failover.</p>
-                            </div>
-                            <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
-                              <div className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
-                              <span className="text-[10px] font-black text-yellow-400 uppercase tracking-widest">IN DEVELOPMENT</span>
-                            </div>
-                          </div>
 
-                          <div className="flex items-center gap-3 opacity-30 pointer-events-none">
+                          <div className="flex items-center gap-3">
                             <div className="w-9 h-9 rounded-2xl bg-brand-primary/10 border border-brand-primary/20 flex items-center justify-center shrink-0">
                               <Key size={16} className="text-brand-primary" />
                             </div>
