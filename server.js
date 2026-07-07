@@ -819,7 +819,7 @@ RESPONSE FORMAT — return ONLY valid JSON, no markdown fences, no extra text:
           ? `Generate exactly ${count} coding challenge(s) inspired by real LeetCode problems about "${topic}" for the "${context.track || 'DSA'}" track with "${difficulty}" difficulty. Set a realistic leetcodeNumber for each.\nIMPORTANT: Each question MUST use a COMPLETELY DIFFERENT real-world domain/industry setting to frame the LeetCode-style problem. Rotate through: healthcare, logistics, banking, gaming, social media, e-commerce, transport, education, cybersecurity.\nALL solutions must be COMPLETE programs — include all imports/headers and a main() function demonstrating the sample I/O. Code must compile and run without modification.\n\nContext:\n${contextBlock}`
           : `Generate exactly ${count} unique coding challenge(s) about "${topic}" for the "${context.track || 'DSA'}" track with "${difficulty}" difficulty.\nIMPORTANT: Each question MUST use a COMPLETELY DIFFERENT real-world domain/company scenario — rotate through healthcare, logistics, banking, gaming, social media, e-commerce, transport, education, cybersecurity. Never repeat the same domain in one batch.\nALL solutions must be COMPLETE programs — include all imports/headers and a main() function that reads the sample input and prints the output. Code must run as-is without modification.\n\nContext:\n${contextBlock}`;
 
-        const rawContent = await callAI({
+        const { content: rawContent } = await callAI({
           provider:     reqProvider,
           model:        reqModel || keyInfo.model || undefined,
           apiKey:       keyInfo.apiKey,
@@ -837,7 +837,7 @@ RESPONSE FORMAT — return ONLY valid JSON, no markdown fences, no extra text:
       } else {
         const userPrompt = `Generate exactly ${count} advanced DSA MCQ(s) about "${topic}".\n\nContext:\n${contextBlock}`;
 
-        const rawContent = await callAI({
+        const { content: rawContent } = await callAI({
           provider:     reqProvider,
           model:        reqModel || keyInfo.model || undefined,
           apiKey:       keyInfo.apiKey,

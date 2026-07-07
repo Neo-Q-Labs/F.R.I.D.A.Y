@@ -124,6 +124,9 @@ export default function App() {
   // MCP real-time job tracking
   const [mcpJob, setMcpJob] = useState(null); // {jobId, topic, type, count, track, status, startedAt}
   const [mcpOverlay, setMcpOverlay] = useState(false); // show the timer overlay
+  const [mcpBackgrounded, setMcpBackgrounded] = useState(false); // user dismissed overlay; generation still running
+  const [mcpDoneNotif, setMcpDoneNotif] = useState(null); // {type, topic, track, course, cat} — completion banner
+  const mcpDoneHandledRef = useRef(false); // prevents duplicate saves when polling sees 'done' multiple times
   const [overlayMsg, setOverlayMsg] = useState('Connecting to AI engine');
   // Rotating quote in MCP overlay
   const [mcpQuoteIdx, setMcpQuoteIdx] = useState(0);
@@ -634,9 +637,11 @@ TECHNICAL NOTES:
         // Active or recently completed job
         setMcpJob(data);
         if (data.status === 'running') {
-          setMcpOverlay(true);
+          // Only show overlay if user hasn't deliberately backgrounded it
+          if (!mcpBackgrounded) setMcpOverlay(true);
         }
-        if (data.status === 'done' && mcpOverlay) {
+        if (data.status === 'done' && (mcpOverlay || mcpBackgrounded) && !mcpDoneHandledRef.current) {
+          mcpDoneHandledRef.current = true; // prevent re-entry on next poll tick
           if (data.type === 'planner') {
             // Re-save planner with authenticated userId
             if (data.result && Array.isArray(data.result) && data.result.length > 0) {
@@ -652,11 +657,19 @@ TECHNICAL NOTES:
                 });
               } catch { /* ignore */ }
             }
-            setTimeout(() => {
-              setMcpOverlay(false);
+            if (mcpOverlay) {
+              setTimeout(() => {
+                setMcpOverlay(false);
+                setMcpJob(null);
+                mcpDoneHandledRef.current = false;
+                showPage('planner');
+              }, 3000);
+            } else {
               setMcpJob(null);
-              showPage('planner');
-            }, 3000);
+              setMcpBackgrounded(false);
+              mcpDoneHandledRef.current = false;
+              setMcpDoneNotif({ type: 'planner', topic: data.topic, track: data.track, course: data.course });
+            }
           } else {
             // Re-save questions with authenticated userId so they appear in history
             if (data.result && Array.isArray(data.result) && data.result.length > 0) {
@@ -678,24 +691,41 @@ TECHNICAL NOTES:
               } catch { /* ignore */ }
             }
             await fetchHistory();
-            setTimeout(() => {
-              setMcpOverlay(false);
+            const jTrack  = data.track;
+            const jCourse = data.course;
+            const jCat    = getCategoryForTrack(jTrack);
+            if (mcpOverlay) {
+              setTimeout(() => {
+                setMcpOverlay(false);
+                setMcpJob(null);
+                mcpDoneHandledRef.current = false;
+                if (jCat)    setContentBankCategory(jCat);
+                if (jTrack)  setContentBankTrack(jTrack);
+                if (jCourse) setContentBankCourse(jCourse);
+                showPage('contentbank');
+              }, 3000);
+            } else {
               setMcpJob(null);
-              const jTrack  = data.track;
-              const jCourse = data.course;
-              const jCat    = getCategoryForTrack(jTrack);
+              setMcpBackgrounded(false);
+              mcpDoneHandledRef.current = false;
               if (jCat)    setContentBankCategory(jCat);
               if (jTrack)  setContentBankTrack(jTrack);
               if (jCourse) setContentBankCourse(jCourse);
-              showPage('contentbank');
-            }, 3000);
+              setMcpDoneNotif({ type: data.type, topic: data.topic, track: jTrack, course: jCourse, cat: jCat });
+            }
           }
         }
-        if (data.status === 'error' && mcpOverlay) {
-          setTimeout(() => {
-            setMcpOverlay(false);
+        if (data.status === 'error' && (mcpOverlay || mcpBackgrounded)) {
+          if (mcpOverlay) {
+            setTimeout(() => {
+              setMcpOverlay(false);
+              setMcpJob(null);
+            }, 4000);
+          } else {
+            setMcpBackgrounded(false);
             setMcpJob(null);
-          }, 4000);
+            showToast('MCP generation failed', true);
+          }
         }
       } catch {
         // Ignore poll errors silently
@@ -703,7 +733,7 @@ TECHNICAL NOTES:
     };
     const interval = setInterval(pollMcp, 2000);
     return () => clearInterval(interval);
-  }, [mcpOverlay, mcpJob]);
+  }, [mcpOverlay, mcpJob, mcpBackgrounded]);
 
   // Rotate quotes during MCP overlay
   useEffect(() => {
@@ -1722,16 +1752,26 @@ TECHNICAL NOTES:
 
               {/* 2 · Generate — AI question synthesizer */}
               <button
-                onClick={() => showPage('generate')}
+                onClick={() => {
+                  if (mcpJob && mcpBackgrounded) {
+                    setMcpBackgrounded(false);
+                    setMcpOverlay(true);
+                  } else {
+                    showPage('generate');
+                  }
+                }}
                 className={cn(
-                  "w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 cursor-pointer",
+                  "w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 cursor-pointer relative",
                   currentPage === 'generate'
                     ? "bg-blue-600 text-white"
                     : "text-slate-600 hover:text-white hover:bg-white/5"
                 )}
-                title="Generate"
+                title={mcpJob && mcpBackgrounded ? "Generation in progress — click to view" : "Generate"}
               >
                 <Sparkles size={16} />
+                {mcpJob && mcpBackgrounded && (
+                  <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                )}
               </button>
 
               {/* 3 · Tracks — Content Bank */}
@@ -2082,7 +2122,6 @@ TECHNICAL NOTES:
                         {[
                           ['questions', 'MCQ QUESTIONS'],
                           ['coding',    'CODING LOGIC'],
-                          ['assessment','THEORY / NOTES'],
                         ].map(([val, lbl]) => (
                           <button key={val} onClick={() => {
                             setGenerationMode(val);
@@ -3676,6 +3715,44 @@ TECHNICAL NOTES:
         />
       )}
 
+      {/* MCP background-completion notification banner */}
+      {mcpDoneNotif && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9500] w-full max-w-sm px-4 animate-in slide-in-from-top-4 duration-400 pointer-events-auto">
+          <div className="flex items-center gap-3 px-4 py-3 rounded-2xl border border-emerald-500/30 shadow-2xl shadow-emerald-500/15 backdrop-blur-xl"
+            style={{ background: 'rgba(5,25,20,0.92)' }}>
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 flex items-center justify-center shrink-0">
+              <Check size={15} className="text-emerald-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest font-mono">
+                {mcpDoneNotif.type === 'planner' ? 'Planner Ready!' : 'Questions Created!'}
+              </p>
+              <p className="text-[9px] text-white/40 font-mono truncate">{mcpDoneNotif.topic}</p>
+            </div>
+            <button
+              onClick={() => {
+                const notif = mcpDoneNotif;
+                setMcpDoneNotif(null);
+                if (notif.type === 'planner') {
+                  showPage('planner');
+                } else {
+                  showPage('contentbank');
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/35 text-emerald-300 text-[9px] font-black uppercase tracking-widest font-mono transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+            >
+              {mcpDoneNotif.type === 'planner' ? 'View Planner' : 'Move to Questions'} →
+            </button>
+            <button
+              onClick={() => setMcpDoneNotif(null)}
+              className="w-6 h-6 rounded-lg flex items-center justify-center text-white/20 hover:text-white/60 hover:bg-white/5 transition-colors cursor-pointer shrink-0"
+            >
+              <X size={11} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* MCP generation overlay — shown when Claude triggers a generation via MCP */}
       {mcpOverlay && mcpJob && (
         <div className="fixed inset-0 z-[9000] bg-[#090d18] flex flex-col items-center justify-center gap-5 animate-in fade-in duration-300"
@@ -3796,7 +3873,7 @@ TECHNICAL NOTES:
 
           {/* Skip / dismiss button */}
           <button
-            onClick={() => { setMcpOverlay(false); }}
+            onClick={() => { setMcpOverlay(false); setMcpBackgrounded(true); }}
             className="text-[9px] text-slate-600 hover:text-slate-400 font-mono uppercase tracking-widest cursor-pointer transition-colors mt-1"
           >
             Continue in background ↗
