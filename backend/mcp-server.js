@@ -31,12 +31,12 @@ const TVA_TRACKS = [
 ];
 
 // â”€â”€ Notify F.R.I.D.A.Y frontend (for the live timer overlay) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-async function notifyFrontend(jobId, topic, type, count, track, client, course, status, userId) {
+async function notifyFrontend(jobId, topic, type, count, track, client, course, status, userId, mcpToken) {
   try {
     await fetch(`${QUESTAI_URL}/api/mcp/notify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-mcp-secret': MCP_SECRET },
-      body: JSON.stringify({ jobId, topic, type, count, track, client, course, status, userId })
+      body: JSON.stringify({ jobId, topic, type, count, track, client, course, status, userId, mcpToken })
     });
   } catch {
     // Frontend is optional â€” app might not be running
@@ -66,10 +66,11 @@ function buildServer() {
       difficulty: z.enum(['Easy','Medium','Hard']).default('Medium'),
       source:     z.enum(['non-leetcode','leetcode']).default('non-leetcode'),
       userId:     z.string().optional().describe('F.R.I.D.A.Y user ID for per-user job isolation (pass exactly as provided in the prompt)'),
+    mcpToken:   z.string().optional().describe('F.R.I.D.A.Y user auth token — copy exactly from your MCP prompt, do not modify'),
     },
-    async ({ topic, type, count, track, client, course, difficulty, source, userId }) => {
+    async ({ topic, type, count, track, client, course, difficulty, source, userId, mcpToken }) => {
       const jobId = `mcp-${Date.now()}`;
-      await notifyFrontend(jobId, topic, type, count, track, client, course, 'running', userId);
+      await notifyFrontend(jobId, topic, type, count, track, client, course, 'running', userId, mcpToken);
       const context = `Client: ${client} | Track: ${track} | Course: ${course} | Difficulty: ${difficulty}`;
 
       if (type === 'coding') {
@@ -136,7 +137,7 @@ Rules:
 - testCases MUST have exactly 15 entries: first 3 public (isPublic: true, match sampleInput/sampleOutput + one variation), then 12 private (isPublic: false) covering edge cases, stress tests, boundary values, special cases
 - Return the JSON immediately, no preamble
 
-After generating the JSON, call **friday.save_questions** with jobId="${jobId}", type="${type}", track="${track}", course="${course}", client="${client}", difficulty="${difficulty}"${userId ? `, userId="${userId}"` : ''}, and the questions JSON string to save to F.R.I.D.A.Y.`
+After generating the JSON, call **friday.save_questions** with jobId="${jobId}", type="${type}", track="${track}", course="${course}", client="${client}", difficulty="${difficulty}"${userId ? `, userId="${userId}"` : ''}${mcpToken ? `, mcpToken="${mcpToken}"` : ''}, and the questions JSON string to save to F.R.I.D.A.Y.`
           }]
         };
       } else {
@@ -181,7 +182,7 @@ Context: ${context}
 
 **Explanation rule:** MUST address all 4 options â€” why the correct answer is right AND why each wrong option is wrong. Vague explanations ("A is incorrect") are not allowed.
 
-After generating the JSON, call **friday.save_questions** with jobId="${jobId}", type="${type}", track="${track}", course="${course}", client="${client}", difficulty="${difficulty}"${userId ? `, userId="${userId}"` : ''}, and the questions JSON string to save to F.R.I.D.A.Y.`
+After generating the JSON, call **friday.save_questions** with jobId="${jobId}", type="${type}", track="${track}", course="${course}", client="${client}", difficulty="${difficulty}"${userId ? `, userId="${userId}"` : ''}${mcpToken ? `, mcpToken="${mcpToken}"` : ''}, and the questions JSON string to save to F.R.I.D.A.Y.`
           }]
         };
       }
@@ -202,8 +203,9 @@ After generating the JSON, call **friday.save_questions** with jobId="${jobId}",
       client:     z.string().default('General'),
       difficulty: z.string().default('Medium'),
       userId:     z.string().optional().describe('F.R.I.D.A.Y user ID for per-user job isolation'),
+    mcpToken:   z.string().optional().describe('F.R.I.D.A.Y user auth token — copy exactly from your MCP prompt, do not modify'),
     },
-    async ({ jobId, questions, topic, type, track, course, client, difficulty, userId }) => {
+    async ({ jobId, questions, topic, type, track, course, client, difficulty, userId, mcpToken }) => {
       let parsed;
       try {
         const raw = JSON.parse(questions);
@@ -217,12 +219,12 @@ After generating the JSON, call **friday.save_questions** with jobId="${jobId}",
         const resp = await fetch(`${QUESTAI_URL}/api/mcp/save`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-mcp-secret': MCP_SECRET },
-          body: JSON.stringify({ jobId, questions: parsed, topic, type, track, course, client, difficulty, userId })
+          body: JSON.stringify({ jobId, questions: parsed, topic, type, track, course, client, difficulty, userId, mcpToken })
         });
         saved = resp.ok;
       } catch { /* server might not be running */ }
 
-      await notifyFrontend(jobId, topic || 'Questions', type, parsed.length, track, client, course, 'done', userId);
+      await notifyFrontend(jobId, topic || 'Questions', type, parsed.length, track, client, course, 'done', userId, mcpToken);
 
       return {
         content: [{
@@ -257,14 +259,15 @@ After generating the JSON, call **friday.save_questions** with jobId="${jobId}",
       practiceAtHomeCount:    z.number().int().min(1).max(5).default(3),
       challengeYourselfCount: z.number().int().min(1).max(5).default(2),
       userId:                 z.string().optional().describe('F.R.I.D.A.Y user ID for per-user job isolation (pass exactly as provided in the prompt)'),
+    mcpToken:               z.string().optional().describe('F.R.I.D.A.Y user auth token — copy exactly from your MCP prompt, do not modify'),
     },
-    async ({ courseName, track, client, weeks, skillBuilderCount, practiceAtHomeCount, challengeYourselfCount, userId }) => {
+    async ({ courseName, track, client, weeks, skillBuilderCount, practiceAtHomeCount, challengeYourselfCount, userId, mcpToken }) => {
       let parsedWeeks;
       try { parsedWeeks = JSON.parse(weeks); } catch {
         return { content: [{ type: 'text', text: 'âŒ Invalid weeks JSON. Pass a valid JSON array of {weekNumber, topic, subtopics[]}.' }] };
       }
       const jobId = `mcp-planner-${Date.now()}`;
-      await notifyFrontend(jobId, courseName, 'planner', parsedWeeks.length, track, client, '', 'running', userId);
+      await notifyFrontend(jobId, courseName, 'planner', parsedWeeks.length, track, client, '', 'running', userId, mcpToken);
 
       const totalPerWeek = skillBuilderCount + practiceAtHomeCount + challengeYourselfCount;
 
@@ -314,7 +317,7 @@ Rules:
 Weeks to generate (${parsedWeeks.length} total):
 ${parsedWeeks.map(w => `  Week ${w.weekNumber}: ${w.topic}${w.subtopics?.length ? ` | ${w.subtopics.slice(0,4).join(', ')}` : ''}`).join('\n')}
 
-After generating the complete JSON, call **friday.save_planner** with jobId="${jobId}", courseName="${courseName}", track="${track}", client="${client}"${userId ? `, userId="${userId}"` : ''}, and the full planner JSON string.`
+After generating the complete JSON, call **friday.save_planner** with jobId="${jobId}", courseName="${courseName}", track="${track}", client="${client}"${userId ? `, userId="${userId}"` : ''}${mcpToken ? `, mcpToken="${mcpToken}"` : ''}, and the full planner JSON string.`
         }]
       };
     }
@@ -331,8 +334,9 @@ After generating the complete JSON, call **friday.save_planner** with jobId="${j
       track:      z.string().default('DSA'),
       client:     z.string().default('General'),
       userId:     z.string().optional().describe('F.R.I.D.A.Y user ID for per-user job isolation'),
+    mcpToken:   z.string().optional().describe('F.R.I.D.A.Y user auth token — copy exactly from your MCP prompt, do not modify'),
     },
-    async ({ jobId, planner, courseName, track, client, userId }) => {
+    async ({ jobId, planner, courseName, track, client, userId, mcpToken }) => {
       let parsed;
       try { parsed = JSON.parse(planner); } catch {
         return { content: [{ type: 'text', text: 'âŒ Invalid JSON. Pass the full planner JSON string from the generate step.' }] };
@@ -346,12 +350,12 @@ After generating the complete JSON, call **friday.save_planner** with jobId="${j
         const resp = await fetch(`${QUESTAI_URL}/api/mcp/save-planner`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-mcp-secret': MCP_SECRET },
-          body: JSON.stringify({ jobId, courseName, track, client, weeks, userId })
+          body: JSON.stringify({ jobId, courseName, track, client, weeks, userId, mcpToken })
         });
         saved = resp.ok;
       } catch { /* server might not be running */ }
 
-      await notifyFrontend(jobId, courseName || 'Planner', 'planner', weeks.length, track, client, '', 'done', userId);
+      await notifyFrontend(jobId, courseName || 'Planner', 'planner', weeks.length, track, client, '', 'done', userId, mcpToken);
 
       return {
         content: [{

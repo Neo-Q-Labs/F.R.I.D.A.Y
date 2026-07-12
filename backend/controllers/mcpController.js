@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { callAI } from '../services/aiService.js';
 import { dbConnected } from '../utils/helpers.js';
 import { Generation } from '../models/Generation.js';
@@ -10,8 +11,28 @@ import {
 
 const MCP_SECRET = process.env.MCP_SECRET || 'friday-mcp-2025';
 
-// In-memory job store — keyed by jobId, each job has a userId field for isolation
+// In-memory job store keyed by jobId; each job carries the resolved userId
 const mcpJobs = new Map();
+
+// Server-verified user tokens: token → { userId, expiresAt }
+// Avoids trusting the LLM to faithfully pass an optional userId parameter.
+const mcpUserTokens = new Map();
+
+function cleanTokens() {
+  const now = Date.now();
+  for (const [tok, data] of mcpUserTokens) {
+    if (data.expiresAt < now) mcpUserTokens.delete(tok);
+  }
+}
+
+// Resolve userId: server token takes precedence over the raw userId string from LLM
+function resolveUserId(mcpToken, fallbackUserId) {
+  if (mcpToken) {
+    const entry = mcpUserTokens.get(mcpToken);
+    if (entry && entry.expiresAt > Date.now()) return entry.userId;
+  }
+  return fallbackUserId || null;
+}
 
 function checkSecret(req, res) {
   if (req.headers['x-mcp-secret'] !== MCP_SECRET) {
@@ -21,16 +42,32 @@ function checkSecret(req, res) {
   return true;
 }
 
+// GET /api/mcp/token — requires JWT auth; returns a 4-hour user-bound token for MCP isolation
+export const getUserToken = (req, res) => {
+  cleanTokens();
+  const userId = req.user.userId.toString();
+  // Reuse existing valid token for this user to keep prompts stable
+  for (const [tok, data] of mcpUserTokens) {
+    if (data.userId === userId && data.expiresAt > Date.now()) {
+      return res.json({ token: tok });
+    }
+  }
+  const token = randomUUID();
+  mcpUserTokens.set(token, { userId, expiresAt: Date.now() + 4 * 60 * 60 * 1000 });
+  res.json({ token });
+};
+
 export const trigger = (req, res) => {
   if (!checkSecret(req, res)) return;
-  const { topic, type = 'coding', count = 10, track = 'DSA', client = 'General', difficulty = 'Medium', source = 'non-leetcode', userId } = req.body;
+  const { topic, type = 'coding', count = 10, track = 'DSA', client = 'General', difficulty = 'Medium', source = 'non-leetcode', userId, mcpToken } = req.body;
   if (!topic) return res.status(400).json({ error: 'topic is required' });
 
+  const resolvedUserId = resolveUserId(mcpToken, userId);
   const jobId = `mcp-${Date.now()}`;
   const job = {
     id: jobId, topic, type, count: parseInt(count) || 10, track, client,
     difficulty, source, status: 'running', startedAt: Date.now(),
-    userId: userId || null,
+    userId: resolvedUserId,
     result: null, error: null, completedAt: null
   };
   mcpJobs.set(jobId, job);
@@ -79,14 +116,16 @@ export const trigger = (req, res) => {
 
 export const notify = (req, res) => {
   if (!checkSecret(req, res)) return;
-  const { jobId, topic, type, count, track, client, course, status, result, userId } = req.body;
+  const { jobId, topic, type, count, track, client, course, status, result, userId, mcpToken } = req.body;
   if (!jobId) return res.status(400).json({ error: 'jobId required' });
+
+  const resolvedUserId = resolveUserId(mcpToken, userId);
 
   if (status === 'running') {
     mcpJobs.set(jobId, {
       id: jobId, topic, type, count: parseInt(count) || 10, track: track || 'DSA',
       client: client || 'General', course: course || '', status: 'running',
-      userId: userId || null,
+      userId: resolvedUserId,
       startedAt: Date.now(), result: null, error: null, completedAt: null
     });
     if (mcpJobs.size > 50) {
@@ -98,22 +137,24 @@ export const notify = (req, res) => {
     job.status = status;
     job.completedAt = Date.now();
     if (result) job.result = result;
-    if (userId && !job.userId) job.userId = userId;
+    if (resolvedUserId && !job.userId) job.userId = resolvedUserId;
   }
   res.json({ ok: true });
 };
 
 export const save = async (req, res) => {
   if (!checkSecret(req, res)) return;
-  const { jobId, questions, topic, type, track, client, course, difficulty, userId } = req.body;
+  const { jobId, questions, topic, type, track, client, course, difficulty, userId, mcpToken } = req.body;
   if (!questions || !Array.isArray(questions)) return res.status(400).json({ error: 'questions array required' });
+
+  const resolvedUserId = resolveUserId(mcpToken, userId);
 
   if (mcpJobs.has(jobId)) {
     const job = mcpJobs.get(jobId);
     job.status = 'done';
     job.result = questions;
     job.completedAt = Date.now();
-    if (userId && !job.userId) job.userId = userId;
+    if (resolvedUserId && !job.userId) job.userId = resolvedUserId;
   }
 
   try {
@@ -121,9 +162,10 @@ export const save = async (req, res) => {
       const g = new Generation({
         topic: topic || 'MCP Generated', type: type || 'coding',
         track, client, course: course || '', difficulty, questions, timestamp: new Date(),
-        ...(userId ? { userId } : {})
+        ...(resolvedUserId ? { userId: resolvedUserId } : {})
       });
       await g.save();
+      console.log(`[MCP save] Saved ${questions.length} questions for userId=${resolvedUserId || 'unknown'}`);
     }
   } catch (err) {
     console.error('[MCP save]', err.message);
@@ -133,8 +175,10 @@ export const save = async (req, res) => {
 
 export const savePlanner = async (req, res) => {
   if (!checkSecret(req, res)) return;
-  const { jobId, courseName, track, client, weeks, userId } = req.body;
+  const { jobId, courseName, track, client, weeks, userId, mcpToken } = req.body;
   if (!weeks || !Array.isArray(weeks)) return res.status(400).json({ error: 'weeks array required' });
+
+  const resolvedUserId = resolveUserId(mcpToken, userId);
 
   if (mcpJobs.has(jobId)) {
     const job = mcpJobs.get(jobId);
@@ -142,7 +186,7 @@ export const savePlanner = async (req, res) => {
     job.result = weeks;
     job.topic = courseName || job.topic;
     job.completedAt = Date.now();
-    if (userId && !job.userId) job.userId = userId;
+    if (resolvedUserId && !job.userId) job.userId = resolvedUserId;
   }
 
   try {
@@ -159,18 +203,11 @@ export const savePlanner = async (req, res) => {
   res.json({ ok: true, saved: weeks.length });
 };
 
-// GET /api/mcp/status — requires JWT (applied at route level), returns only the requesting user's jobs
+// GET /api/mcp/status — requires JWT; strictly filters by this user's jobs only
 export const statusAll = (req, res) => {
   const userId = req.user.userId.toString();
-  const now = Date.now();
-  const RECENT_MS = 10 * 60 * 1000;
   const jobs = [...mcpJobs.values()]
-    .filter(j => {
-      if (j.userId === userId) return true;
-      // Backward compat: show recent running jobs without userId (old prompts)
-      if (!j.userId && j.status === 'running' && (now - j.startedAt) < RECENT_MS) return true;
-      return false;
-    })
+    .filter(j => j.userId === userId)
     .sort((a, b) => b.startedAt - a.startedAt);
   const active = jobs.find(j => j.status === 'running') || jobs[0] || null;
   if (!active) return res.json({ status: 'idle' });

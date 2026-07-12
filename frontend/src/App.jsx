@@ -134,6 +134,8 @@ export default function App() {
   const [mcpPromptModal, setMcpPromptModal] = useState(false);
   const [mcpPromptText, setMcpPromptText] = useState('');
   const [mcpPromptEditing, setMcpPromptEditing] = useState(false);
+  // Cached server-verified MCP token for per-user isolation
+  const [mcpToken, setMcpToken] = useState('');
   // Arcade modal
   const [arcadeOpen, setArcadeOpen] = useState(false);
   
@@ -735,12 +737,27 @@ TECHNICAL NOTES:
     } catch { return ''; }
   };
 
+  // Fetch (and cache) a server-verified user token for MCP isolation.
+  // This is preferred over passing raw userId because the server resolves
+  // it without trusting the LLM to faithfully pass optional parameters.
+  const fetchMcpToken = async () => {
+    if (mcpToken) return mcpToken;
+    try {
+      const r = await apiFetch('/api/mcp/token');
+      if (!r.ok) return '';
+      const d = await r.json();
+      setMcpToken(d.token || '');
+      return d.token || '';
+    } catch { return ''; }
+  };
+
   // Build the full MCP prompt from the current generate form state
-  const handleGetMcpPrompt = () => {
+  const handleGetMcpPrompt = async () => {
     if (!topic.trim()) { showToast('Enter a topic first!', true); return; }
     const type = generationMode === 'coding' ? 'coding' : 'mcq';
     const format = getActiveFormat();
     const userId = getMcpUserId();
+    const token = await fetchMcpToken();
     const lines = [
       `Use questai.generate_questions with these parameters:`,
       `  topic: "${topic}"`,
@@ -752,6 +769,7 @@ TECHNICAL NOTES:
       `  difficulty: "${difficulty}"`,
       `  source: "${sourceType}"`,
     ];
+    if (token)  lines.push(`  mcpToken: "${token}"`);
     if (userId) lines.push(`  userId: "${userId}"`);
     if (additionalContext.trim()) {
       lines.push(``, `Additional context:`, additionalContext.trim());
@@ -765,10 +783,11 @@ TECHNICAL NOTES:
   };
 
   // Build MCP prompt for planner generation (called from PlannerPage via prop)
-  const handleGetMcpPlannerPrompt = ({ courseName, track, client, skillBuilderCount, practiceAtHomeCount, challengeYourselfCount }) => {
+  const handleGetMcpPlannerPrompt = async ({ courseName, track, client, skillBuilderCount, practiceAtHomeCount, challengeYourselfCount }) => {
     if (!courseName?.trim()) { showToast('Enter a course name first!', true); return; }
     if (!track) { showToast('Select a track first!', true); return; }
     const userId = getMcpUserId();
+    const token = await fetchMcpToken();
     const lines = [
       `I need to generate a F.R.I.D.A.Y Content Planner. Please:`,
       ``,
@@ -785,11 +804,12 @@ TECHNICAL NOTES:
       `   practiceAtHomeCount: ${practiceAtHomeCount}`,
       `   challengeYourselfCount: ${challengeYourselfCount}`,
       `   weeks: [extracted JSON array from the Excel — [{weekNumber, topic, subtopics[]}, ...]]`,
+      ...(token  ? [`   mcpToken: "${token}"`]  : []),
       ...(userId ? [`   userId: "${userId}"`] : []),
       ``,
       `3. Generate coding questions for every week as instructed by the tool.`,
       ``,
-      `4. Call questai.save_planner with jobId, courseName, track, client${userId ? ', userId' : ''}, and the full planner JSON.`,
+      `4. Call questai.save_planner with jobId, courseName, track, client${token ? ', mcpToken' : userId ? ', userId' : ''}, and the full planner JSON.`,
     ];
     setMcpPromptText(lines.join('\n'));
     setMcpPromptEditing(false);
