@@ -624,7 +624,7 @@ TECHNICAL NOTES:
   useEffect(() => {
     const pollMcp = async () => {
       try {
-        const resp = await fetch('/api/mcp/status');
+        const resp = await apiFetch('/api/mcp/status');
         if (!resp.ok) return;
         const data = await resp.json();
         if (data.status === 'idle') {
@@ -742,11 +742,22 @@ TECHNICAL NOTES:
     return () => clearInterval(t);
   }, [mcpOverlay]);
 
+  // Extract userId from stored JWT for per-user MCP job isolation
+  const getMcpUserId = () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) return '';
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload.userId || '';
+    } catch { return ''; }
+  };
+
   // Build the full MCP prompt from the current generate form state
   const handleGetMcpPrompt = () => {
     if (!topic.trim()) { showToast('Enter a topic first!', true); return; }
     const type = generationMode === 'coding' ? 'coding' : 'mcq';
     const format = getActiveFormat();
+    const userId = getMcpUserId();
     const lines = [
       `Use questai.generate_questions with these parameters:`,
       `  topic: "${topic}"`,
@@ -758,6 +769,7 @@ TECHNICAL NOTES:
       `  difficulty: "${difficulty}"`,
       `  source: "${sourceType}"`,
     ];
+    if (userId) lines.push(`  userId: "${userId}"`);
     if (additionalContext.trim()) {
       lines.push(``, `Additional context:`, additionalContext.trim());
     }
@@ -773,6 +785,7 @@ TECHNICAL NOTES:
   const handleGetMcpPlannerPrompt = ({ courseName, track, client, skillBuilderCount, practiceAtHomeCount, challengeYourselfCount }) => {
     if (!courseName?.trim()) { showToast('Enter a course name first!', true); return; }
     if (!track) { showToast('Select a track first!', true); return; }
+    const userId = getMcpUserId();
     const lines = [
       `I need to generate a F.R.I.D.A.Y Content Planner. Please:`,
       ``,
@@ -789,10 +802,11 @@ TECHNICAL NOTES:
       `   practiceAtHomeCount: ${practiceAtHomeCount}`,
       `   challengeYourselfCount: ${challengeYourselfCount}`,
       `   weeks: [extracted JSON array from the Excel — [{weekNumber, topic, subtopics[]}, ...]]`,
+      ...(userId ? [`   userId: "${userId}"`] : []),
       ``,
       `3. Generate coding questions for every week as instructed by the tool.`,
       ``,
-      `4. Call questai.save_planner with jobId, courseName, track, client, and the full planner JSON.`,
+      `4. Call questai.save_planner with jobId, courseName, track, client${userId ? ', userId' : ''}, and the full planner JSON.`,
     ];
     setMcpPromptText(lines.join('\n'));
     setMcpPromptEditing(false);
