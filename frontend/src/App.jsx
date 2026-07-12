@@ -94,13 +94,13 @@ const MCP_QUOTES = [
   "Zero memorisation questions. Deep conceptual understanding only.",
 ];
 
-// Setup Mock User Info
+// Placeholder used before real user data loads from auth
 const defaultUser = {
-  name: "Sai Deepak D Y",
-  empId: "neo10506",
-  initials: "SD",
-  department: "Swift Ops",
-  role: "admin"
+  name: "",
+  empId: "",
+  initials: "--",
+  department: "",
+  role: "employee"
 };
 
 export default function App() {
@@ -111,7 +111,7 @@ export default function App() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [theme, setTheme] = useState('dark');
   const [userRole, setUserRole] = useState('admin'); // 'employee' or 'admin'
-  const [loginIdInput, setLoginIdInput] = useState('neo10506');
+  const [loginIdInput, setLoginIdInput] = useState('');
   const [loginPasswordInput, setLoginPasswordInput] = useState('');
   
   // App Logic States
@@ -314,7 +314,7 @@ export default function App() {
   const [selectedDomain, setSelectedDomain] = useState('Software Engineering');
   const [selectedTrack, setSelectedTrack] = useState('DSA');
   const [selectedCourse, setSelectedCourse] = useState('NerdX DSA Program');
-  const [topic, setTopic] = useState('Binary Search Trees');
+  const [topic, setTopic] = useState('');
   const [additionalContext, setAdditionalContext] = useState('');
   const [generationMode, setGenerationMode] = useState('questions'); // 'questions' | 'assessment'
   const [selectedType, setSelectedType] = useState('coding'); // 'coding' | 'mcq'

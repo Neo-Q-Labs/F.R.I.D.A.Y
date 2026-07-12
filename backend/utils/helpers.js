@@ -13,13 +13,54 @@ export function sanitiseJsonStrings(raw) {
     if (ch === '\\') { esc = true; out += ch; continue; }
     if (ch === '"') { inStr = !inStr; out += ch; continue; }
     if (inStr) {
-      if      (ch === '\n') { out += '\\n';  continue; }
-      else if (ch === '\r') { out += '\\r';  continue; }
-      else if (ch === '\t') { out += '\\t';  continue; }
+      const code = ch.charCodeAt(0);
+      if      (ch === '\n') { out += '\\n'; continue; }
+      else if (ch === '\r') { out += '\\r'; continue; }
+      else if (ch === '\t') { out += '\\t'; continue; }
+      else if (ch === '\f') { out += '\\f'; continue; }
+      else if (ch === '\b') { out += '\\b'; continue; }
+      else if (code < 0x20) { out += '\\u00' + code.toString(16).padStart(2, '0'); continue; }
     }
     out += ch;
   }
   return out;
+}
+
+// Attempts to extract complete question objects when a truncated AI response
+// causes JSON.parse to fail (token limit hit mid-response).
+export function tryRecoverPartialQuestions(raw) {
+  const qMatch = raw.match(/"questions"\s*:\s*\[/);
+  if (!qMatch) return null;
+
+  const arrayOpenIdx = qMatch.index + qMatch[0].length;
+  let depth = 0, inStr = false, esc = false;
+  const cutPoints = []; // raw indices immediately after each complete question '}'
+
+  for (let i = arrayOpenIdx; i < raw.length; i++) {
+    const ch = raw[i];
+    if (esc) { esc = false; continue; }
+    if (inStr) {
+      if (ch === '\\') esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') { inStr = true; continue; }
+    if (ch === '{' || ch === '[') depth++;
+    else if (ch === '}' || ch === ']') {
+      depth--;
+      if (depth === 0 && ch === '}') cutPoints.push(i + 1);
+      else if (depth < 0) break;
+    }
+  }
+
+  if (!cutPoints.length) return null;
+
+  // Try largest set of complete questions first, falling back on parse error
+  for (let c = cutPoints.length - 1; c >= 0; c--) {
+    const candidate = raw.substring(0, arrayOpenIdx) + raw.substring(arrayOpenIdx, cutPoints[c]) + ']}';
+    try { return JSON.parse(candidate); } catch {}
+  }
+  return null;
 }
 
 export function isRateLimitError(err) {

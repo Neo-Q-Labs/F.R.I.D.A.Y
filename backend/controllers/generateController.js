@@ -1,4 +1,5 @@
 import { callAI, getUserApiKey } from '../services/aiService.js';
+import { tryRecoverPartialQuestions } from '../utils/helpers.js';
 import {
   CODING_SYSTEM_PROMPT, MCQ_SYSTEM_PROMPT,
   DATABASE_CODING_SYSTEM_PROMPT, DATABASE_MCQ_SYSTEM_PROMPT,
@@ -48,9 +49,15 @@ export const generate = async (req, res) => {
         apiKey:       keyInfo.apiKey,
         systemPrompt: (isDbTrack ? DATABASE_CODING_SYSTEM_PROMPT : CODING_SYSTEM_PROMPT) + formatInstruction,
         userPrompt,
-        maxTokens:    Math.min(16000, Math.max(5000, count * 1800))
+        maxTokens:    Math.min(32000, Math.max(8000, count * 3200))
       });
-      const data = JSON.parse(rawContent);
+      let data;
+      try {
+        data = JSON.parse(rawContent);
+      } catch {
+        data = tryRecoverPartialQuestions(rawContent);
+        if (!data) throw new Error('AI response was truncated — try fewer questions or switch to a different provider.');
+      }
       const questions = data.questions || [];
       const enriched = (isDbTrack && data.companyContext)
         ? questions.map(q => ({ ...q, companyContext: data.companyContext }))
@@ -66,9 +73,15 @@ export const generate = async (req, res) => {
         apiKey:       keyInfo.apiKey,
         systemPrompt: (isDbTrack ? DATABASE_MCQ_SYSTEM_PROMPT : MCQ_SYSTEM_PROMPT) + formatInstruction,
         userPrompt,
-        maxTokens:    4000
+        maxTokens:    Math.min(8000, Math.max(2000, count * 600))
       });
-      const data = JSON.parse(rawContent);
+      let data;
+      try {
+        data = JSON.parse(rawContent);
+      } catch {
+        data = tryRecoverPartialQuestions(rawContent);
+        if (!data) throw new Error('AI response was truncated — try fewer questions or switch to a different provider.');
+      }
       const questions = data.questions || [];
       const enriched = (isDbTrack && data.companyContext)
         ? questions.map(q => ({ ...q, companyContext: data.companyContext }))
@@ -85,12 +98,16 @@ export const generate = async (req, res) => {
         const inner = parsed?.error?.message || parsed?.message;
         const code  = parsed?.error?.code;
         if (code === 'json_validate_failed') {
-          userMsg = 'Generation failed: the AI produced malformed JSON. This usually means token limit was reached mid-response. Try reducing question count or switching to a different provider.';
+          userMsg = 'Generation failed: AI produced malformed JSON. Try fewer questions or switch to a different provider.';
         } else if (inner) {
           userMsg = inner;
         }
       }
     } catch {}
+    // Translate raw JSON parse errors to friendly messages
+    if (userMsg.includes('Unterminated') || userMsg.includes('Unexpected end') || userMsg.includes('Expected')) {
+      userMsg = 'AI response was cut off mid-generation. Try fewer questions (1-3) or use a provider with higher token limits.';
+    }
     res.status(500).json({ error: userMsg });
   }
 };
