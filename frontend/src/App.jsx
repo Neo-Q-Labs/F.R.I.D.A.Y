@@ -471,6 +471,7 @@ TECHNICAL NOTES:
           profileEmpId: user.username
         }));
         setIsLoggedIn(true);
+        fetchHistory();
       } catch (err) {
         console.warn('Failed to recover session');
         localStorage.removeItem('authToken');
@@ -671,25 +672,7 @@ TECHNICAL NOTES:
               setMcpDoneNotif({ type: 'planner', topic: data.topic, track: data.track, course: data.course });
             }
           } else {
-            // Re-save questions with authenticated userId so they appear in history
-            if (data.result && Array.isArray(data.result) && data.result.length > 0) {
-              try {
-                await apiFetch('/api/history', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    topic: data.topic || 'MCP Generated',
-                    type: data.type || 'coding',
-                    track: data.track || 'DSA',
-                    course: data.course || '',
-                    client: data.client || 'General',
-                    difficulty: data.difficulty || 'Medium',
-                    questions: data.result,
-                    source: 'mcp'
-                  })
-                });
-              } catch { /* ignore */ }
-            }
+            // mcp/save already persisted questions with userId; just refresh history
             await fetchHistory();
             const jTrack  = data.track;
             const jCourse = data.course;
@@ -1373,6 +1356,7 @@ TECHNICAL NOTES:
       setInputs(prev => ({ ...prev, profileName: displayName, profileEmpId: user.username || username }));
       showToast(`✓ Welcome, ${displayName}!`);
       setCurrentPage('dashboard');
+      fetchHistory();
 
       // Clear inputs
       setLoginIdInput('');

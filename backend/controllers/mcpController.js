@@ -120,7 +120,8 @@ export const save = async (req, res) => {
     if (dbConnected()) {
       const g = new Generation({
         topic: topic || 'MCP Generated', type: type || 'coding',
-        track, client, course: course || '', difficulty, questions, timestamp: new Date()
+        track, client, course: course || '', difficulty, questions, timestamp: new Date(),
+        ...(userId ? { userId } : {})
       });
       await g.save();
     }
@@ -161,8 +162,15 @@ export const savePlanner = async (req, res) => {
 // GET /api/mcp/status — requires JWT (applied at route level), returns only the requesting user's jobs
 export const statusAll = (req, res) => {
   const userId = req.user.userId.toString();
+  const now = Date.now();
+  const RECENT_MS = 10 * 60 * 1000;
   const jobs = [...mcpJobs.values()]
-    .filter(j => j.userId === userId)
+    .filter(j => {
+      if (j.userId === userId) return true;
+      // Backward compat: show recent running jobs without userId (old prompts)
+      if (!j.userId && j.status === 'running' && (now - j.startedAt) < RECENT_MS) return true;
+      return false;
+    })
     .sort((a, b) => b.startedAt - a.startedAt);
   const active = jobs.find(j => j.status === 'running') || jobs[0] || null;
   if (!active) return res.json({ status: 'idle' });
