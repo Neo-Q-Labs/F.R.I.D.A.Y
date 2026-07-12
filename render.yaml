@@ -3,7 +3,7 @@ services:
     name: friday-app
     runtime: node
     buildCommand: npm install && npm run build
-    startCommand: node server.js
+    startCommand: node backend/server.js
     envVars:
       - key: NODE_ENV
         value: production
@@ -22,7 +22,7 @@ services:
     name: friday-mcp
     runtime: node
     buildCommand: npm install
-    startCommand: node mcp-server.js
+    startCommand: node backend/mcp-server.js
     envVars:
       - key: FRIDAY_URL
         sync: false

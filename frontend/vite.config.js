@@ -11,11 +11,15 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': path.resolve(process.cwd(), '.'),
+      '@': path.resolve(process.cwd(), 'frontend'),
     },
   },
+  root: path.resolve(process.cwd(), 'frontend'),
+  build: {
+    outDir: path.resolve(process.cwd(), 'dist'),
+    emptyOutDir: true,
+  },
   server: {
-    // HMR is disabled in AI Studio via DISABLE_HMR env var.
     hmr: process.env.DISABLE_HMR !== 'true',
   },
 });

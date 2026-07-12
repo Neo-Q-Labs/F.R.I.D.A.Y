@@ -4,13 +4,13 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx server.js",
-    "start": "node server.js",
-    "mcp": "node mcp-server.js",
-    "mcp:http": "cross-env MCP_HTTP_PORT=4040 node mcp-server.js",
-    "build": "vite build",
-    "preview": "vite preview",
-    "lint": "eslint ."
+    "dev": "tsx backend/server.js",
+    "start": "node backend/server.js",
+    "mcp": "node backend/mcp-server.js",
+    "mcp:http": "cross-env MCP_HTTP_PORT=4040 node backend/mcp-server.js",
+    "build": "vite build --config frontend/vite.config.js",
+    "preview": "vite preview --config frontend/vite.config.js",
+    "lint": "eslint frontend/src"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.2",
