@@ -478,6 +478,8 @@ TECHNICAL NOTES:
         console.warn('Failed to recover session');
         localStorage.removeItem('authToken');
         localStorage.removeItem('user');
+        localStorage.removeItem('mcpToken');
+        setMcpToken('');
       }
     }
   }, []);
@@ -737,17 +739,32 @@ TECHNICAL NOTES:
     } catch { return ''; }
   };
 
-  // Fetch (and cache) a server-verified user token for MCP isolation.
-  // This is preferred over passing raw userId because the server resolves
-  // it without trusting the LLM to faithfully pass optional parameters.
+  // Fetch (and cache) a signed MCP user token.
+  // Token is a JWT signed by the backend — no server-side Map needed, survives restarts.
+  // Cached in localStorage so the token is stable across page reloads.
   const fetchMcpToken = async () => {
+    // Use in-state cache first
     if (mcpToken) return mcpToken;
+    // Check localStorage cache — reuse if at least 30 min left
+    try {
+      const cached = localStorage.getItem('mcpToken');
+      if (cached) {
+        const payload = JSON.parse(atob(cached.split('.')[1]));
+        if (payload.exp * 1000 > Date.now() + 30 * 60 * 1000) {
+          setMcpToken(cached);
+          return cached;
+        }
+      }
+    } catch {}
+    // Fetch fresh token from server
     try {
       const r = await apiFetch('/api/mcp/token');
       if (!r.ok) return '';
       const d = await r.json();
-      setMcpToken(d.token || '');
-      return d.token || '';
+      const tok = d.token || '';
+      setMcpToken(tok);
+      if (tok) localStorage.setItem('mcpToken', tok);
+      return tok;
     } catch { return ''; }
   };
 
@@ -758,8 +775,16 @@ TECHNICAL NOTES:
     const format = getActiveFormat();
     const userId = getMcpUserId();
     const token = await fetchMcpToken();
+    const authLines = [];
+    if (token)  authLines.push(`  mcpToken: "${token}"`);
+    if (userId) authLines.push(`  userId: "${userId}"`);
     const lines = [
-      `Use questai.generate_questions with these parameters:`,
+      ...(authLines.length ? [
+        `REQUIRED — pass these EXACTLY to every tool call (mcpToken identifies your account):`,
+        ...authLines,
+        ``,
+      ] : []),
+      `Call questai.generate_questions with:`,
       `  topic: "${topic}"`,
       `  type: ${type}`,
       `  count: ${count}`,
@@ -768,9 +793,8 @@ TECHNICAL NOTES:
       `  course: "${selectedCourse}"`,
       `  difficulty: "${difficulty}"`,
       `  source: "${sourceType}"`,
+      ...authLines,
     ];
-    if (token)  lines.push(`  mcpToken: "${token}"`);
-    if (userId) lines.push(`  userId: "${userId}"`);
     if (additionalContext.trim()) {
       lines.push(``, `Additional context:`, additionalContext.trim());
     }
@@ -788,7 +812,15 @@ TECHNICAL NOTES:
     if (!track) { showToast('Select a track first!', true); return; }
     const userId = getMcpUserId();
     const token = await fetchMcpToken();
+    const authLines = [];
+    if (token)  authLines.push(`   mcpToken: "${token}"`);
+    if (userId) authLines.push(`   userId: "${userId}"`);
     const lines = [
+      ...(authLines.length ? [
+        `REQUIRED — pass these EXACTLY to every tool call (mcpToken identifies your account):`,
+        ...authLines,
+        ``,
+      ] : []),
       `I need to generate a F.R.I.D.A.Y Content Planner. Please:`,
       ``,
       `1. Read my attached Excel planner file to extract:`,
@@ -804,8 +836,7 @@ TECHNICAL NOTES:
       `   practiceAtHomeCount: ${practiceAtHomeCount}`,
       `   challengeYourselfCount: ${challengeYourselfCount}`,
       `   weeks: [extracted JSON array from the Excel — [{weekNumber, topic, subtopics[]}, ...]]`,
-      ...(token  ? [`   mcpToken: "${token}"`]  : []),
-      ...(userId ? [`   userId: "${userId}"`] : []),
+      ...authLines,
       ``,
       `3. Generate coding questions for every week as instructed by the tool.`,
       ``,
@@ -1869,6 +1900,8 @@ TECHNICAL NOTES:
                 onClick={() => {
                   localStorage.removeItem('authToken');
                   localStorage.removeItem('user');
+                  localStorage.removeItem('mcpToken');
+                  setMcpToken('');
                   setIsLoggedIn(false);
                   setInputs(prev => ({ ...prev, profileName: '', profileEmpId: '' }));
                   setCurrentPage('login');
