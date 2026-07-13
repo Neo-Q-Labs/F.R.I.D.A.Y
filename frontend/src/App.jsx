@@ -134,9 +134,10 @@ export default function App() {
   const [mcpPromptModal, setMcpPromptModal] = useState(false);
   const [mcpPromptText, setMcpPromptText] = useState('');
   const [mcpPromptEditing, setMcpPromptEditing] = useState(false);
-  // Personalized MCP server URL (30-day JWT baked in) — fetched once, cached in localStorage
-  const [mcpServerUrl, setMcpServerUrl] = useState('');
-  const [mcpUrlCopied, setMcpUrlCopied] = useState(false);
+  // User's MCP token (7-day JWT) — embedded in prompts so Claude passes it as userToken param
+  const [mcpUserToken, setMcpUserToken] = useState('');
+  const [mcpSharedUrl, setMcpSharedUrl] = useState('https://questai-mcp.onrender.com');
+  const [mcpTokenCopied, setMcpTokenCopied] = useState(false);
   // Arcade modal
   const [arcadeOpen, setArcadeOpen] = useState(false);
   
@@ -479,8 +480,8 @@ TECHNICAL NOTES:
         console.warn('Failed to recover session');
         localStorage.removeItem('authToken');
         localStorage.removeItem('user');
-        localStorage.removeItem('mcpServerUrl');
-        setMcpServerUrl('');
+        localStorage.removeItem('mcpUserToken');
+        setMcpUserToken('');
         setMcpJob(null);
         setMcpOverlay(false);
         setMcpBackgrounded(false);
@@ -737,41 +738,44 @@ TECHNICAL NOTES:
     return () => clearInterval(t);
   }, [mcpOverlay]);
 
-  // Fetch (and cache) the personalized MCP server URL.
-  // The URL contains a 30-day JWT that identifies the user — no params needed in tool calls.
-  const fetchMcpServerUrl = async () => {
-    if (mcpServerUrl) return mcpServerUrl;
+  // Fetch (and cache) the user's personal MCP token (7-day JWT).
+  // The token is embedded in prompts — Claude passes it as userToken to every tool call.
+  const fetchMcpUserToken = async () => {
+    if (mcpUserToken) return mcpUserToken;
     try {
-      const cached = localStorage.getItem('mcpServerUrl');
+      const cached = localStorage.getItem('mcpUserToken');
       if (cached) {
-        const token = cached.split('/u/')[1];
-        if (token) {
-          const payload = JSON.parse(atob(token.split('.')[1]));
-          if (payload.exp * 1000 > Date.now() + 24 * 60 * 60 * 1000) {
-            setMcpServerUrl(cached);
-            return cached;
-          }
+        const payload = JSON.parse(atob(cached.split('.')[1]));
+        // Reuse cache if more than 2 days remain
+        if (payload.exp * 1000 > Date.now() + 2 * 24 * 60 * 60 * 1000) {
+          setMcpUserToken(cached);
+          return cached;
         }
       }
     } catch {}
     try {
-      const r = await apiFetch('/api/mcp/server-url');
+      const r = await apiFetch('/api/mcp/token');
       if (!r.ok) return '';
       const d = await r.json();
-      const url = d.url || '';
-      setMcpServerUrl(url);
-      if (url) localStorage.setItem('mcpServerUrl', url);
-      return url;
+      const token = d.token || '';
+      if (d.mcpUrl) setMcpSharedUrl(d.mcpUrl);
+      setMcpUserToken(token);
+      if (token) localStorage.setItem('mcpUserToken', token);
+      return token;
     } catch { return ''; }
   };
 
-  // Build the MCP prompt — clean, no auth params (userId is baked into the MCP server URL)
+  // Build the MCP prompt — userToken embedded so Claude passes it as required tool param
   const handleGetMcpPrompt = async () => {
     if (!topic.trim()) { showToast('Enter a topic first!', true); return; }
     const type = generationMode === 'coding' ? 'coding' : 'mcq';
     const format = getActiveFormat();
-    fetchMcpServerUrl(); // fire-and-forget — populates mcpServerUrl state for the modal
-    const lines = [
+    const token = await fetchMcpUserToken();
+    const lines = [];
+    if (token) {
+      lines.push(`Your F.R.I.D.A.Y token (include in every tool call):`, `  userToken: "${token}"`, ``);
+    }
+    lines.push(
       `Call questai.generate_questions with:`,
       `  topic: "${topic}"`,
       `  type: ${type}`,
@@ -781,7 +785,8 @@ TECHNICAL NOTES:
       `  course: "${selectedCourse}"`,
       `  difficulty: "${difficulty}"`,
       `  source: "${sourceType}"`,
-    ];
+      ...(token ? [`  userToken: "${token}"`] : []),
+    );
     if (additionalContext.trim()) {
       lines.push(``, `Additional context:`, additionalContext.trim());
     }
@@ -797,8 +802,12 @@ TECHNICAL NOTES:
   const handleGetMcpPlannerPrompt = async ({ courseName, track, client, skillBuilderCount, practiceAtHomeCount, challengeYourselfCount }) => {
     if (!courseName?.trim()) { showToast('Enter a course name first!', true); return; }
     if (!track) { showToast('Select a track first!', true); return; }
-    fetchMcpServerUrl(); // fire-and-forget — populates mcpServerUrl for the modal
-    const lines = [
+    const token = await fetchMcpUserToken();
+    const lines = [];
+    if (token) {
+      lines.push(`Your F.R.I.D.A.Y token (include in every tool call):`, `  userToken: "${token}"`, ``);
+    }
+    lines.push(
       `I need to generate a F.R.I.D.A.Y Content Planner. Please:`,
       ``,
       `1. Read my attached Excel planner file to extract:`,
@@ -814,11 +823,12 @@ TECHNICAL NOTES:
       `   practiceAtHomeCount: ${practiceAtHomeCount}`,
       `   challengeYourselfCount: ${challengeYourselfCount}`,
       `   weeks: [extracted JSON array from the Excel — [{weekNumber, topic, subtopics[]}, ...]]`,
+      ...(token ? [`   userToken: "${token}"`] : []),
       ``,
       `3. Generate coding questions for every week as instructed by the tool.`,
       ``,
-      `4. Call questai.save_planner with jobId, courseName, track, client, and the full planner JSON.`,
-    ];
+      `4. Call questai.save_planner with jobId, courseName, track, client, userToken, and the full planner JSON.`,
+    );
     setMcpPromptText(lines.join('\n'));
     setMcpPromptEditing(false);
     setMcpPromptModal(true);
@@ -1877,8 +1887,8 @@ TECHNICAL NOTES:
                 onClick={() => {
                   localStorage.removeItem('authToken');
                   localStorage.removeItem('user');
-                  localStorage.removeItem('mcpServerUrl');
-                  setMcpServerUrl('');
+                  localStorage.removeItem('mcpUserToken');
+                  setMcpUserToken('');
                   setIsLoggedIn(false);
                   setMcpJob(null);
                   setMcpOverlay(false);
@@ -3824,9 +3834,10 @@ TECHNICAL NOTES:
                     )}
                   </div>
                 </div>
-                <p className="text-[10px] text-slate-500 font-mono">
+                <p className={`text-[10px] font-mono ${elapsed > 300 && mcpJob.status === 'running' ? 'text-amber-400' : 'text-slate-500'}`}>
                   {mcpJob.status === 'done' ? 'Done — redirecting...' :
                    mcpJob.status === 'error' ? 'Generation failed' :
+                   elapsed > 300 ? 'Taking longer than expected — token limit may have been reached' :
                    'Claude is generating...'}
                 </p>
               </div>
@@ -3868,6 +3879,22 @@ TECHNICAL NOTES:
           >
             Continue in background ↗
           </button>
+
+          {/* Stop generation button */}
+          {mcpJob.status === 'running' && (
+            <button
+              onClick={() => {
+                setMcpOverlay(false);
+                setMcpJob(null);
+                setMcpBackgrounded(false);
+                mcpDoneHandledRef.current = false;
+                showToast('Generation stopped — questions may still save when Claude finishes');
+              }}
+              className="text-[9px] text-red-500/60 hover:text-red-400 font-mono uppercase tracking-widest cursor-pointer transition-colors"
+            >
+              ✕ Stop generation
+            </button>
+          )}
         </div>
       )}
 
@@ -3936,32 +3963,30 @@ TECHNICAL NOTES:
               </div>
             </div>
 
-            {/* Personalized MCP Server URL — one-time Claude.ai setup */}
-            {mcpServerUrl && (
-              <div className="px-6 pt-4 pb-0">
-                <div className="rounded-xl bg-blue-500/[0.08] border border-blue-500/20 p-3">
-                  <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest font-mono mb-2">
-                    One-time setup: add your URL to Claude.ai → Settings → Integrations → MCP Servers
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 text-[10px] text-blue-200 font-mono truncate min-w-0">{mcpServerUrl}</code>
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(mcpServerUrl).then(() => {
-                          setMcpUrlCopied(true);
-                          setTimeout(() => setMcpUrlCopied(false), 2000);
-                        });
-                      }}
-                      className="shrink-0 px-2.5 py-1.5 rounded-lg border border-blue-500/30 text-blue-400 hover:text-blue-200 text-[9px] font-black uppercase tracking-widest font-mono cursor-pointer transition-all whitespace-nowrap">
-                      {mcpUrlCopied ? '✓ COPIED' : 'COPY URL'}
-                    </button>
-                  </div>
-                  <p className="text-[9px] text-slate-500 font-mono mt-1.5">
-                    Your personal URL already contains your identity — no tokens to paste in prompts.
-                  </p>
+            {/* Shared org MCP URL — one-time Claude.ai setup */}
+            <div className="px-6 pt-4 pb-0">
+              <div className="rounded-xl bg-blue-500/[0.08] border border-blue-500/20 p-3">
+                <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest font-mono mb-2">
+                  One-time org setup → Claude.ai Settings → Integrations → MCP Servers
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-[10px] text-blue-200 font-mono truncate min-w-0">{mcpSharedUrl}</code>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(mcpSharedUrl).then(() => {
+                        setMcpTokenCopied(true);
+                        setTimeout(() => setMcpTokenCopied(false), 2000);
+                      });
+                    }}
+                    className="shrink-0 px-2.5 py-1.5 rounded-lg border border-blue-500/30 text-blue-400 hover:text-blue-200 text-[9px] font-black uppercase tracking-widest font-mono cursor-pointer transition-all whitespace-nowrap">
+                    {mcpTokenCopied ? '✓ COPIED' : 'COPY URL'}
+                  </button>
                 </div>
+                <p className="text-[9px] text-slate-500 font-mono mt-1.5">
+                  Shared across your organisation — add once per Claude account. Your personal token is already embedded in the prompt below.
+                </p>
               </div>
-            )}
+            </div>
 
             {/* Prompt box — view or edit mode */}
             <div className="px-6 py-4">
@@ -3982,7 +4007,7 @@ TECHNICAL NOTES:
               <p className="text-[9px] text-slate-600 font-mono mt-2">
                 {mcpPromptEditing
                   ? 'Editing mode — changes apply only to this copy. Click PREVIEW to review.'
-                  : 'Paste this prompt into Claude.ai after adding your MCP server URL above.'}
+                  : 'Paste this prompt into Claude.ai. Your token is embedded — Claude will include it in every tool call.'}
               </p>
             </div>
 

@@ -37,19 +37,12 @@ function resolveUserId(mcpToken, fallbackUserId) {
   return fallbackUserId ? fallbackUserId.toString() : null;
 }
 
-// GET /api/mcp/token — returns a short-lived signed JWT for legacy use
+// GET /api/mcp/token — returns a 7-day signed JWT + shared MCP URL for prompt setup
 export const getUserToken = (req, res) => {
   const userId = req.user.userId.toString();
-  const token = jwt.sign({ userId, type: 'mcp' }, JWT_SECRET, { expiresIn: '8h' });
-  res.json({ token });
-};
-
-// GET /api/mcp/server-url — returns personalized MCP server URL with 30-day JWT baked in
-export const getMcpServerUrl = (req, res) => {
-  const userId = req.user.userId.toString();
-  const token = jwt.sign({ userId, type: 'mcp-session' }, JWT_SECRET, { expiresIn: '30d' });
-  const base = process.env.MCP_SERVER_URL || 'https://questai-mcp.onrender.com';
-  res.json({ url: `${base}/u/${token}` });
+  const token = jwt.sign({ userId, type: 'mcp' }, JWT_SECRET, { expiresIn: '7d' });
+  const mcpUrl = process.env.MCP_SERVER_URL || 'https://questai-mcp.onrender.com';
+  res.json({ token, mcpUrl });
 };
 
 export const trigger = (req, res) => {

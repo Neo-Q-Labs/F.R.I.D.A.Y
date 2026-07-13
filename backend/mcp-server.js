@@ -1,10 +1,10 @@
 /**
  * F.R.I.D.A.Y MCP Server — Claude-native generation
  *
- * Per-user isolation via URL-token: each user gets a personalized URL
- * https://questai-mcp.onrender.com/u/{30d-JWT}
- * The JWT is verified at connection time; userId flows through the closure.
- * No userId/mcpToken parameters in tool schemas — Claude never has to pass them.
+ * Single shared org URL: https://questai-mcp.onrender.com
+ * Per-user isolation via userToken — each user's signed JWT is passed as a
+ * required parameter in every tool call. The MCP server verifies the JWT and
+ * extracts userId at tool-call time. No per-user URLs needed.
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -33,21 +33,14 @@ const TVA_TRACKS = [
   'AWS', 'Azure', 'Docker', 'AI/ML', 'Cybersecurity', 'SDET', 'SAP', 'DAA'
 ];
 
-// ── Extract userId from /u/{jwt-token} URL path ───────────────────────────────
-function extractUrlToken(pathname) {
-  const match = pathname.match(/^\/u\/([^/]+)(\/.*)?$/);
-  if (!match) return { userId: null, urlToken: null, effectivePath: pathname };
-
-  const rawToken = match[1];
-  let userId = null;
+// ── Extract userId from a signed userToken JWT ────────────────────────────────
+function extractUserToken(userToken) {
+  if (!userToken) return null;
   try {
-    const decoded = jwt.verify(rawToken, JWT_SECRET);
-    if (decoded.userId && (decoded.type === 'mcp-session' || decoded.type === 'mcp')) {
-      userId = decoded.userId.toString();
-    }
-  } catch { /* expired or tampered — userId stays null */ }
-
-  return { userId, urlToken: rawToken, effectivePath: match[2] || '/' };
+    const decoded = jwt.verify(userToken, JWT_SECRET);
+    if (decoded.userId && decoded.type === 'mcp') return decoded.userId.toString();
+  } catch { /* expired or tampered */ }
+  return null;
 }
 
 // ── Notify F.R.I.D.A.Y frontend (live timer overlay) ─────────────────────────
@@ -63,8 +56,8 @@ async function notifyFrontend(jobId, topic, type, count, track, client, course, 
   }
 }
 
-// ── Factory: one McpServer per session, userId baked in via closure ───────────
-function buildServer(sessionUserId) {
+// ── Factory: one McpServer per session ────────────────────────────────────────
+function buildServer() {
   const s = new McpServer({ name: 'friday', version: '3.1.0' });
 
   // ── Tool: generate_questions ───────────────────────────────────────────────
@@ -84,8 +77,10 @@ function buildServer(sessionUserId) {
       course:     z.string().default('General'),
       difficulty: z.enum(['Easy','Medium','Hard']).default('Medium'),
       source:     z.enum(['non-leetcode','leetcode']).default('non-leetcode'),
+      userToken:  z.string().describe('Your personal F.R.I.D.A.Y token — copy from the MCP Prompt setup page and include in every tool call'),
     },
-    async ({ topic, type, count, track, client, course, difficulty, source }) => {
+    async ({ topic, type, count, track, client, course, difficulty, source, userToken }) => {
+      const sessionUserId = extractUserToken(userToken);
       const jobId = `mcp-${Date.now()}`;
       await notifyFrontend(jobId, topic, type, count, track, client, course, 'running', sessionUserId);
       const context = `Client: ${client} | Track: ${track} | Course: ${course} | Difficulty: ${difficulty}`;
@@ -154,7 +149,7 @@ Rules:
 - testCases MUST have exactly 15 entries: first 3 public (isPublic: true, match sampleInput/sampleOutput + one variation), then 12 private (isPublic: false) covering edge cases, stress tests, boundary values, special cases
 - Return the JSON immediately, no preamble
 
-After generating the JSON, call **friday.save_questions** with jobId="${jobId}", type="${type}", track="${track}", course="${course}", client="${client}", difficulty="${difficulty}", and the questions JSON string to save to F.R.I.D.A.Y.`
+After generating the JSON, call **friday.save_questions** with jobId="${jobId}", type="${type}", track="${track}", course="${course}", client="${client}", difficulty="${difficulty}", userToken="${userToken}", and the questions JSON string to save to F.R.I.D.A.Y.`
           }]
         };
       } else {
@@ -199,7 +194,7 @@ Context: ${context}
 
 **Explanation rule:** MUST address all 4 options — why the correct answer is right AND why each wrong option is wrong. Vague explanations ("A is incorrect") are not allowed.
 
-After generating the JSON, call **friday.save_questions** with jobId="${jobId}", type="${type}", track="${track}", course="${course}", client="${client}", difficulty="${difficulty}", and the questions JSON string to save to F.R.I.D.A.Y.`
+After generating the JSON, call **friday.save_questions** with jobId="${jobId}", type="${type}", track="${track}", course="${course}", client="${client}", difficulty="${difficulty}", userToken="${userToken}", and the questions JSON string to save to F.R.I.D.A.Y.`
           }]
         };
       }
@@ -219,8 +214,10 @@ After generating the JSON, call **friday.save_questions** with jobId="${jobId}",
       course:     z.string().default('General'),
       client:     z.string().default('General'),
       difficulty: z.string().default('Medium'),
+      userToken:  z.string().describe('Your personal F.R.I.D.A.Y token — same value passed to generate_questions'),
     },
-    async ({ jobId, questions, topic, type, track, course, client, difficulty }) => {
+    async ({ jobId, questions, topic, type, track, course, client, difficulty, userToken }) => {
+      const sessionUserId = extractUserToken(userToken);
       let parsed;
       try {
         const raw = JSON.parse(questions);
@@ -273,8 +270,10 @@ After generating the JSON, call **friday.save_questions** with jobId="${jobId}",
       skillBuilderCount:      z.number().int().min(1).max(5).default(3),
       practiceAtHomeCount:    z.number().int().min(1).max(5).default(3),
       challengeYourselfCount: z.number().int().min(1).max(5).default(2),
+      userToken:              z.string().describe('Your personal F.R.I.D.A.Y token — copy from the MCP Prompt setup page and include in every tool call'),
     },
-    async ({ courseName, track, client, weeks, skillBuilderCount, practiceAtHomeCount, challengeYourselfCount }) => {
+    async ({ courseName, track, client, weeks, skillBuilderCount, practiceAtHomeCount, challengeYourselfCount, userToken }) => {
+      const sessionUserId = extractUserToken(userToken);
       let parsedWeeks;
       try { parsedWeeks = JSON.parse(weeks); } catch {
         return { content: [{ type: 'text', text: '❌ Invalid weeks JSON. Pass a valid JSON array of {weekNumber, topic, subtopics[]}.' }] };
@@ -330,7 +329,7 @@ Rules:
 Weeks to generate (${parsedWeeks.length} total):
 ${parsedWeeks.map(w => `  Week ${w.weekNumber}: ${w.topic}${w.subtopics?.length ? ` | ${w.subtopics.slice(0,4).join(', ')}` : ''}`).join('\n')}
 
-After generating the complete JSON, call **friday.save_planner** with jobId="${jobId}", courseName="${courseName}", track="${track}", client="${client}", and the full planner JSON string.`
+After generating the complete JSON, call **friday.save_planner** with jobId="${jobId}", courseName="${courseName}", track="${track}", client="${client}", userToken="${userToken}", and the full planner JSON string.`
         }]
       };
     }
@@ -346,8 +345,10 @@ After generating the complete JSON, call **friday.save_planner** with jobId="${j
       courseName: z.string().optional(),
       track:      z.string().default('DSA'),
       client:     z.string().default('General'),
+      userToken:  z.string().describe('Your personal F.R.I.D.A.Y token — same value passed to generate_planner'),
     },
-    async ({ jobId, planner, courseName, track, client }) => {
+    async ({ jobId, planner, courseName, track, client, userToken }) => {
+      const sessionUserId = extractUserToken(userToken);
       let parsed;
       try { parsed = JSON.parse(planner); } catch {
         return { content: [{ type: 'text', text: '❌ Invalid JSON. Pass the full planner JSON string from the generate step.' }] };
@@ -428,7 +429,7 @@ if (HTTP_PORT) {
 
   const httpServer = http.createServer(async (req, res) => {
     const url = new URL(req.url, MCP_SERVER_URL);
-    const { userId: sessionUserId, urlToken, effectivePath } = extractUrlToken(url.pathname);
+    const pathname = url.pathname;
 
     // CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -437,16 +438,15 @@ if (HTTP_PORT) {
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
     // Health check
-    if (req.method === 'GET' && (effectivePath === '/health' || url.pathname === '/health')) {
+    if (req.method === 'GET' && pathname === '/health') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: true, service: 'friday-mcp', version: '3.1.0', sessions: sessions.size }));
       return;
     }
 
     // ── OAuth metadata discovery ───────────────────────────────────────────
-    if (req.method === 'GET' && effectivePath === '/.well-known/oauth-authorization-server') {
-      // Return endpoints scoped to this user's URL prefix (preserves userId through OAuth flow)
-      const baseUrl = urlToken ? `${MCP_SERVER_URL}/u/${urlToken}` : MCP_SERVER_URL;
+    if (req.method === 'GET' && pathname === '/.well-known/oauth-authorization-server') {
+      const baseUrl = MCP_SERVER_URL;
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         issuer:                                baseUrl,
@@ -462,7 +462,7 @@ if (HTTP_PORT) {
     }
 
     // ── Dynamic Client Registration ────────────────────────────────────────
-    if (req.method === 'POST' && effectivePath === '/oauth/register') {
+    if (req.method === 'POST' && pathname === '/oauth/register') {
       try {
         const body = JSON.parse(await readBody(req));
         const clientId = `qai_${crypto.randomUUID().replace(/-/g, '')}`;
@@ -484,7 +484,7 @@ if (HTTP_PORT) {
     }
 
     // ── Authorization endpoint — auto-approve ──────────────────────────────
-    if (req.method === 'GET' && effectivePath === '/oauth/authorize') {
+    if (req.method === 'GET' && pathname === '/oauth/authorize') {
       const clientId      = url.searchParams.get('client_id');
       const redirectUri   = url.searchParams.get('redirect_uri');
       const state         = url.searchParams.get('state');
@@ -500,7 +500,7 @@ if (HTTP_PORT) {
     }
 
     // ── Token endpoint ─────────────────────────────────────────────────────
-    if (req.method === 'POST' && effectivePath === '/oauth/token') {
+    if (req.method === 'POST' && pathname === '/oauth/token') {
       try {
         const raw    = await readBody(req);
         const params = raw.startsWith('{') ? JSON.parse(raw) : Object.fromEntries(new URLSearchParams(raw));
@@ -540,8 +540,6 @@ if (HTTP_PORT) {
 
     if (sessionId && sessions.has(sessionId)) {
       const { transport } = sessions.get(sessionId);
-      // Strip /u/{token} prefix so transport sees the clean path
-      if (urlToken) req.url = effectivePath + (url.search || '');
       try {
         await transport.handleRequest(req, res);
       } catch {
@@ -554,19 +552,16 @@ if (HTTP_PORT) {
       return;
     }
 
-    // ── New session — build server with userId from URL token ──────────────
+    // ── New session ────────────────────────────────────────────────────────
     const transport = new StreamableHTTPServerTransport({ sessionIdHeader: 'mcp-session-id' });
-    const mcpServer = buildServer(sessionUserId);
+    const mcpServer = buildServer();
 
     if (transport.sessionId) {
-      sessions.set(transport.sessionId, { transport, userId: sessionUserId, createdAt: Date.now() });
+      sessions.set(transport.sessionId, { transport, createdAt: Date.now() });
       transport.onclose = () => sessions.delete(transport.sessionId);
     }
 
     await mcpServer.connect(transport);
-
-    // Strip /u/{token} prefix so transport sees the clean path
-    if (urlToken) req.url = effectivePath + (url.search || '');
 
     try {
       await transport.handleRequest(req, res);
@@ -582,12 +577,12 @@ if (HTTP_PORT) {
   httpServer.listen(HTTP_PORT, () => {
     console.error(`[F.R.I.D.A.Y MCP] HTTP server listening on port ${HTTP_PORT}`);
     console.error(`[F.R.I.D.A.Y MCP] OAuth discovery → ${MCP_SERVER_URL}/.well-known/oauth-authorization-server`);
-    console.error(`[F.R.I.D.A.Y MCP] Personalized URL pattern → ${MCP_SERVER_URL}/u/{jwt-token}`);
+    console.error(`[F.R.I.D.A.Y MCP] Organisation URL → ${MCP_SERVER_URL} (shared, userToken param isolates users)`);
   });
 
 } else {
   // ── Local stdio mode — used by Claude Code ─────────────────────────────────
-  const s = buildServer(null);
+  const s = buildServer();
   const transport = new StdioServerTransport();
   await s.connect(transport);
 }
