@@ -28,5 +28,7 @@ services:
         sync: false
       - key: MCP_SECRET
         value: friday-mcp-2025
-      - key: MCP_AUTH_TOKEN
+      - key: JWT_SECRET
         sync: false
+      - key: MCP_SERVER_URL
+        value: https://questai-mcp.onrender.com
