@@ -36,7 +36,7 @@ import {
   Lock,
   FileSpreadsheet, 
   RefreshCw,
-  ImagePlus,
+
   CalendarDays,
   Clock,
   BrainCircuit,
@@ -481,6 +481,11 @@ TECHNICAL NOTES:
         localStorage.removeItem('user');
         localStorage.removeItem('mcpServerUrl');
         setMcpServerUrl('');
+        setMcpJob(null);
+        setMcpOverlay(false);
+        setMcpBackgrounded(false);
+        setMcpDoneNotif(null);
+        mcpDoneHandledRef.current = false;
       }
     }
   }, []);
@@ -629,6 +634,7 @@ TECHNICAL NOTES:
   // ── MCP job polling — detects when Claude triggers generation via MCP ─────────
   useEffect(() => {
     const pollMcp = async () => {
+      if (!isLoggedIn) return; // don't poll or mutate state for unauthenticated sessions
       try {
         const resp = await apiFetch('/api/mcp/status');
         if (!resp.ok) return;
@@ -722,7 +728,7 @@ TECHNICAL NOTES:
     };
     const interval = setInterval(pollMcp, 2000);
     return () => clearInterval(interval);
-  }, [mcpOverlay, mcpJob, mcpBackgrounded]);
+  }, [mcpOverlay, mcpJob, mcpBackgrounded, isLoggedIn]);
 
   // Rotate quotes during MCP overlay
   useEffect(() => {
@@ -730,16 +736,6 @@ TECHNICAL NOTES:
     const t = setInterval(() => setMcpQuoteIdx(i => (i + 1) % MCP_QUOTES.length), 3500);
     return () => clearInterval(t);
   }, [mcpOverlay]);
-
-  // Extract userId from stored JWT for per-user MCP job isolation
-  const getMcpUserId = () => {
-    try {
-      const token = localStorage.getItem('authToken');
-      if (!token) return '';
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      return payload.userId || '';
-    } catch { return ''; }
-  };
 
   // Fetch (and cache) the personalized MCP server URL.
   // The URL contains a 30-day JWT that identifies the user — no params needed in tool calls.
@@ -1884,6 +1880,11 @@ TECHNICAL NOTES:
                   localStorage.removeItem('mcpServerUrl');
                   setMcpServerUrl('');
                   setIsLoggedIn(false);
+                  setMcpJob(null);
+                  setMcpOverlay(false);
+                  setMcpBackgrounded(false);
+                  setMcpDoneNotif(null);
+                  mcpDoneHandledRef.current = false;
                   setInputs(prev => ({ ...prev, profileName: '', profileEmpId: '' }));
                   setCurrentPage('login');
                   setGenerations([]);
@@ -2489,9 +2490,7 @@ TECHNICAL NOTES:
                     <div className="flex bg-slate-100 dark:bg-[#141418] border border-slate-200 dark:border-white/10 rounded-lg p-0.5 select-none overflow-x-auto no-scrollbar">
                       {[
                         { id: 'profile', label: 'PROFILE' },
-                        { id: 'generation', label: 'GENERATION' },
-                        { id: 'api', label: 'API & DATABASE' },
-                        { id: 'notif', label: 'NOTIFICATIONS' }
+                        { id: 'api', label: 'API & KEYS' },
                       ].map(tab => (
                         <button
                           key={tab.id}
@@ -2563,47 +2562,6 @@ TECHNICAL NOTES:
                             className="w-full bg-slate-50 dark:bg-[#1a1a20] border border-slate-200 dark:border-white/10 rounded-lg p-2.5 text-xs text-slate-800 dark:text-white focus:outline-none focus:border-indigo-500"
                           />
                         </div>
-                      </div>
-                    )}
-
-                    {/* GENERATION SETTINGS CONTEXT */}
-                    {activeSettingsTab === 'generation' && (
-                      <div className="bg-card border border-slate-200/80 dark:border-[#1e293b]/50 rounded-xl p-5 space-y-4 shadow-sm text-slate-800 dark:text-white">
-                        <h3 className="text-xs font-black uppercase text-slate-500 dark:text-gray-400 tracking-wider flex items-center gap-2">
-                          <Sliders size={13} /> Synthesizer Setup Defaults
-                        </h3>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div className="space-y-1">
-                            <label className="text-[9px] font-extrabold text-[#6b7280] uppercase tracking-wider">DEFAULT COUNT</label>
-                            <input 
-                              type="number" 
-                              defaultValue={10} 
-                              className="w-full bg-slate-50 dark:bg-[#1a1a20] border border-slate-200 dark:border-white/10 rounded-lg p-2.5 text-xs text-slate-800 dark:text-white focus:outline-none"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[9px] font-extrabold text-[#6b7280] uppercase tracking-wider">DEFAULT DIFFICULTY</label>
-                            <select className="w-full bg-slate-50 dark:bg-[#1a1a20] border border-slate-200 dark:border-white/10 rounded-lg p-2.5 text-xs text-slate-800 dark:text-white focus:outline-none cursor-pointer">
-                              <option>Easy</option>
-                              <option selected>Medium</option>
-                              <option>Hard</option>
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-
-                    {/* API AND INTEGRATIONS — replaced by BYOK panel below */}
-
-                    {/* NOTIFICATIONS SETTINGS */}
-                    {activeSettingsTab === 'notif' && (
-                      <div className="bg-card border border-slate-200/80 dark:border-[#1e293b]/50 rounded-xl p-5 space-y-4 shadow-sm text-slate-800 dark:text-white">
-                        <h3 className="text-xs font-black uppercase text-slate-500 dark:text-gray-400 tracking-wider flex items-center gap-2">
-                          <Sliders size={13} /> Notification Profiles
-                        </h3>
-                        <p className="text-xs text-slate-500 dark:text-gray-450 leading-relaxed font-sans">Configure alert metrics when automated compiles or AI synthesizers verify complete pools.</p>
                       </div>
                     )}
 
