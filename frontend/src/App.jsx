@@ -3880,21 +3880,19 @@ TECHNICAL NOTES:
             Continue in background ↗
           </button>
 
-          {/* Stop generation button */}
-          {mcpJob.status === 'running' && (
-            <button
-              onClick={() => {
-                setMcpOverlay(false);
-                setMcpJob(null);
-                setMcpBackgrounded(false);
-                mcpDoneHandledRef.current = false;
-                showToast('Generation stopped — questions may still save when Claude finishes');
-              }}
-              className="text-[9px] text-red-500/60 hover:text-red-400 font-mono uppercase tracking-widest cursor-pointer transition-colors"
-            >
-              ✕ Stop generation
-            </button>
-          )}
+          {/* Stop generation — always visible so users can dismiss a stuck loader */}
+          <button
+            onClick={() => {
+              setMcpOverlay(false);
+              setMcpJob(null);
+              setMcpBackgrounded(false);
+              mcpDoneHandledRef.current = false;
+              showToast('Generation stopped — questions may still save when Claude finishes');
+            }}
+            className="text-[9px] text-red-500/60 hover:text-red-400 font-mono uppercase tracking-widest cursor-pointer transition-colors"
+          >
+            ✕ Stop generation
+          </button>
         </div>
       )}
 
