@@ -37,13 +37,19 @@ function resolveUserId(mcpToken, fallbackUserId) {
   return fallbackUserId ? fallbackUserId.toString() : null;
 }
 
-// GET /api/mcp/token — requires JWT auth.
-// Returns a self-contained signed token that encodes the userId.
-// No server-side Map needed — JWT signature is the proof of identity.
+// GET /api/mcp/token — returns a short-lived signed JWT for legacy use
 export const getUserToken = (req, res) => {
   const userId = req.user.userId.toString();
   const token = jwt.sign({ userId, type: 'mcp' }, JWT_SECRET, { expiresIn: '8h' });
   res.json({ token });
+};
+
+// GET /api/mcp/server-url — returns personalized MCP server URL with 30-day JWT baked in
+export const getMcpServerUrl = (req, res) => {
+  const userId = req.user.userId.toString();
+  const token = jwt.sign({ userId, type: 'mcp-session' }, JWT_SECRET, { expiresIn: '30d' });
+  const base = process.env.MCP_SERVER_URL || 'https://questai-mcp.onrender.com';
+  res.json({ url: `${base}/u/${token}` });
 };
 
 export const trigger = (req, res) => {

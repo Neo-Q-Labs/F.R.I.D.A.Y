@@ -1,10 +1,10 @@
-﻿/**
- * F.R.I.D.A.Y MCP Server â€” Claude-native generation
+/**
+ * F.R.I.D.A.Y MCP Server — Claude-native generation
  *
- * NO external API calls for generation.
- * The tool provides the prompt structure and schema to Claude,
- * Claude generates using its own model in the current session.
- * The F.R.I.D.A.Y app gets notified for the live timer overlay.
+ * Per-user isolation via URL-token: each user gets a personalized URL
+ * https://questai-mcp.onrender.com/u/{30d-JWT}
+ * The JWT is verified at connection time; userId flows through the closure.
+ * No userId/mcpToken parameters in tool schemas — Claude never has to pass them.
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -13,11 +13,14 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { z } from 'zod';
 import http from 'http';
 import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
 
-const QUESTAI_URL = process.env.FRIDAY_URL || process.env.QUESTAI_URL || 'http://localhost:3000';
-const MCP_SECRET  = process.env.MCP_SECRET  || 'friday-mcp-2025';
+const QUESTAI_URL   = process.env.FRIDAY_URL || process.env.QUESTAI_URL || 'http://localhost:3000';
+const MCP_SECRET    = process.env.MCP_SECRET  || 'friday-mcp-2025';
+const JWT_SECRET    = process.env.JWT_SECRET  || 'dev-secret-key-change-in-production';
+const MCP_SERVER_URL = process.env.MCP_SERVER_URL || 'https://questai-mcp.onrender.com';
 
-// â”€â”€ TVA data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── TVA data ──────────────────────────────────────────────────────────────────
 const TVA_CLIENTS = [
   'Parul University', 'SKG (Sri Krishna Group)',
   'Kumaraguru College of Technology', 'Rajalakshmi Engineering College',
@@ -30,28 +33,44 @@ const TVA_TRACKS = [
   'AWS', 'Azure', 'Docker', 'AI/ML', 'Cybersecurity', 'SDET', 'SAP', 'DAA'
 ];
 
-// â”€â”€ Notify F.R.I.D.A.Y frontend (for the live timer overlay) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-async function notifyFrontend(jobId, topic, type, count, track, client, course, status, userId, mcpToken) {
+// ── Extract userId from /u/{jwt-token} URL path ───────────────────────────────
+function extractUrlToken(pathname) {
+  const match = pathname.match(/^\/u\/([^/]+)(\/.*)?$/);
+  if (!match) return { userId: null, urlToken: null, effectivePath: pathname };
+
+  const rawToken = match[1];
+  let userId = null;
+  try {
+    const decoded = jwt.verify(rawToken, JWT_SECRET);
+    if (decoded.userId && (decoded.type === 'mcp-session' || decoded.type === 'mcp')) {
+      userId = decoded.userId.toString();
+    }
+  } catch { /* expired or tampered — userId stays null */ }
+
+  return { userId, urlToken: rawToken, effectivePath: match[2] || '/' };
+}
+
+// ── Notify F.R.I.D.A.Y frontend (live timer overlay) ─────────────────────────
+async function notifyFrontend(jobId, topic, type, count, track, client, course, status, userId) {
   try {
     await fetch(`${QUESTAI_URL}/api/mcp/notify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-mcp-secret': MCP_SECRET },
-      body: JSON.stringify({ jobId, topic, type, count, track, client, course, status, userId, mcpToken })
+      body: JSON.stringify({ jobId, topic, type, count, track, client, course, status, userId })
     });
   } catch {
-    // Frontend is optional â€” app might not be running
+    // Frontend is optional — app might not be running
   }
 }
 
-// â”€â”€ Factory: create a fresh McpServer with all tools registered â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// One instance per session for correct HTTP session isolation.
-function buildServer() {
-  const s = new McpServer({ name: 'friday', version: '3.0.0' });
+// ── Factory: one McpServer per session, userId baked in via closure ───────────
+function buildServer(sessionUserId) {
+  const s = new McpServer({ name: 'friday', version: '3.1.0' });
 
-  // â”€â”€ Tool: generate_questions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Tool: generate_questions ───────────────────────────────────────────────
   s.tool(
     'generate_questions',
-    'Prepares a structured generation prompt for Claude to create coding or MCQ questions. Claude generates using its own model â€” no external API needed. The F.R.I.D.A.Y app will show a live timer.',
+    'Prepares a structured generation prompt for Claude to create coding or MCQ questions. Claude generates using its own model — no external API needed. The F.R.I.D.A.Y app will show a live timer.',
     {
       topic:      z.string().describe('Topic (e.g. "Binary Search Trees", "Java Generics", "SQL Joins")'),
       type:       z.enum(['coding', 'mcq']).default('coding'),
@@ -65,12 +84,10 @@ function buildServer() {
       course:     z.string().default('General'),
       difficulty: z.enum(['Easy','Medium','Hard']).default('Medium'),
       source:     z.enum(['non-leetcode','leetcode']).default('non-leetcode'),
-      userId:     z.string().optional().describe('F.R.I.D.A.Y user ID for per-user job isolation (pass exactly as provided in the prompt)'),
-    mcpToken:   z.string().optional().describe('F.R.I.D.A.Y user auth token — copy exactly from your MCP prompt, do not modify'),
     },
-    async ({ topic, type, count, track, client, course, difficulty, source, userId, mcpToken }) => {
+    async ({ topic, type, count, track, client, course, difficulty, source }) => {
       const jobId = `mcp-${Date.now()}`;
-      await notifyFrontend(jobId, topic, type, count, track, client, course, 'running', userId, mcpToken);
+      await notifyFrontend(jobId, topic, type, count, track, client, course, 'running', sessionUserId);
       const context = `Client: ${client} | Track: ${track} | Course: ${course} | Difficulty: ${difficulty}`;
 
       if (type === 'coding') {
@@ -81,14 +98,14 @@ function buildServer() {
         return {
           content: [{
             type: 'text',
-            text: `[F.R.I.D.A.Y timer started â€” ${QUESTAI_URL}]
+            text: `[F.R.I.D.A.Y timer started — ${QUESTAI_URL}]
 Job ID: ${jobId}
 
 Generate exactly ${count} ${difficulty} coding challenge(s) about **"${topic}"** for the **${track}** track.
 Style: ${style}
 Context: ${context}
 
-**Output format â€” return ONLY this JSON, no markdown fences:**
+**Output format — return ONLY this JSON, no markdown fences:**
 \`\`\`json
 {
   "questions": [
@@ -101,7 +118,7 @@ Context: ${context}
       "outputFormat": "Output format description",
       "sampleInput": "sample input here",
       "sampleOutput": "sample output here",
-      "constraints": "1 â‰¤ N â‰¤ 10^5",
+      "constraints": "1 ≤ N ≤ 10^5",
       "leetcodeNumber": null,
       "testCases": [
         {"input": "sample input 1", "output": "expected output 1", "isPublic": true},
@@ -132,44 +149,44 @@ Context: ${context}
 \`\`\`
 
 Rules:
-- ALL solutions must be complete, compilable programs â€” no stubs or placeholder comments
+- ALL solutions must be complete, compilable programs — no stubs or placeholder comments
 - Each question MUST use a different real-world domain
 - testCases MUST have exactly 15 entries: first 3 public (isPublic: true, match sampleInput/sampleOutput + one variation), then 12 private (isPublic: false) covering edge cases, stress tests, boundary values, special cases
 - Return the JSON immediately, no preamble
 
-After generating the JSON, call **friday.save_questions** with jobId="${jobId}", type="${type}", track="${track}", course="${course}", client="${client}", difficulty="${difficulty}"${userId ? `, userId="${userId}"` : ''}${mcpToken ? `, mcpToken="${mcpToken}"` : ''}, and the questions JSON string to save to F.R.I.D.A.Y.`
+After generating the JSON, call **friday.save_questions** with jobId="${jobId}", type="${type}", track="${track}", course="${course}", client="${client}", difficulty="${difficulty}", and the questions JSON string to save to F.R.I.D.A.Y.`
           }]
         };
       } else {
         return {
           content: [{
             type: 'text',
-            text: `[F.R.I.D.A.Y timer started â€” ${QUESTAI_URL}]
+            text: `[F.R.I.D.A.Y timer started — ${QUESTAI_URL}]
 Job ID: ${jobId}
 
 Generate exactly ${count} ${difficulty} MCQ questions about **"${topic}"** for the **${track}** track.
 Context: ${context}
 
-**MANDATORY VARIETY RULES â€” every question must test a DIFFERENT concept/subtopic:**
-- Rotate question types across the set: conceptual-understanding, code-output-tracing, error-spotting, best-practice-selection, API/syntax recall, comparison (X vs Y â€” when to use which)
-- For programming/technical tracks: embed short code snippets (â‰¤ 12 lines) in at least 40% of questions â€” ask what it outputs, what the bug is, what fix is correct, or what the time complexity is
-- Cover breadth: pick ${count} distinct sub-concepts within "${topic}" â€” never repeat the same sub-concept in two questions
+**MANDATORY VARIETY RULES — every question must test a DIFFERENT concept/subtopic:**
+- Rotate question types across the set: conceptual-understanding, code-output-tracing, error-spotting, best-practice-selection, API/syntax recall, comparison (X vs Y — when to use which)
+- For programming/technical tracks: embed short code snippets (≤ 12 lines) in at least 40% of questions — ask what it outputs, what the bug is, what fix is correct, or what the time complexity is
+- Cover breadth: pick ${count} distinct sub-concepts within "${topic}" — never repeat the same sub-concept in two questions
 
 **DISTRACTOR QUALITY RULES (non-negotiable):**
-- Every wrong option must be a real misconception, a common off-by-one error, a similar-but-different concept, or subtly wrong code â€” never obviously wrong
-- All 4 options must be the same form (all code snippets, OR all statements â€” never mix types within one question)
+- Every wrong option must be a real misconception, a common off-by-one error, a similar-but-different concept, or subtly wrong code — never obviously wrong
+- All 4 options must be the same form (all code snippets, OR all statements — never mix types within one question)
 - Difficulty calibration: Easy = direct recall/definition; Medium = application/output-tracing/consequence; Hard = edge cases, subtle bugs, expert tradeoffs, complex multi-step reasoning
 
-**Output format â€” return ONLY valid JSON, no markdown fences, no preamble:**
+**Output format — return ONLY valid JSON, no markdown fences, no preamble:**
 {
   "questions": [
     {
       "question": "Full question text. For code questions embed the snippet here using \\n for newlines.",
       "options": {
-        "A": "Option A â€” full text",
-        "B": "Option B â€” full text",
-        "C": "Option C â€” full text",
-        "D": "Option D â€” full text"
+        "A": "Option A — full text",
+        "B": "Option B — full text",
+        "C": "Option C — full text",
+        "D": "Option D — full text"
       },
       "answer": "B",
       "explanation": "B is correct because [precise technical reason with example if helpful]. A is wrong because [specific technical reason]. C is wrong because [specific reason]. D is wrong because [specific reason].",
@@ -180,16 +197,16 @@ Context: ${context}
   ]
 }
 
-**Explanation rule:** MUST address all 4 options â€” why the correct answer is right AND why each wrong option is wrong. Vague explanations ("A is incorrect") are not allowed.
+**Explanation rule:** MUST address all 4 options — why the correct answer is right AND why each wrong option is wrong. Vague explanations ("A is incorrect") are not allowed.
 
-After generating the JSON, call **friday.save_questions** with jobId="${jobId}", type="${type}", track="${track}", course="${course}", client="${client}", difficulty="${difficulty}"${userId ? `, userId="${userId}"` : ''}${mcpToken ? `, mcpToken="${mcpToken}"` : ''}, and the questions JSON string to save to F.R.I.D.A.Y.`
+After generating the JSON, call **friday.save_questions** with jobId="${jobId}", type="${type}", track="${track}", course="${course}", client="${client}", difficulty="${difficulty}", and the questions JSON string to save to F.R.I.D.A.Y.`
           }]
         };
       }
     }
   );
 
-  // â”€â”€ Tool: save_questions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Tool: save_questions ───────────────────────────────────────────────────
   s.tool(
     'save_questions',
     'Saves Claude-generated questions to the F.R.I.D.A.Y app and marks the generation complete (closes the timer overlay). Call this after Claude generates the JSON from generate_questions.',
@@ -202,16 +219,14 @@ After generating the JSON, call **friday.save_questions** with jobId="${jobId}",
       course:     z.string().default('General'),
       client:     z.string().default('General'),
       difficulty: z.string().default('Medium'),
-      userId:     z.string().optional().describe('F.R.I.D.A.Y user ID for per-user job isolation'),
-    mcpToken:   z.string().optional().describe('F.R.I.D.A.Y user auth token — copy exactly from your MCP prompt, do not modify'),
     },
-    async ({ jobId, questions, topic, type, track, course, client, difficulty, userId, mcpToken }) => {
+    async ({ jobId, questions, topic, type, track, course, client, difficulty }) => {
       let parsed;
       try {
         const raw = JSON.parse(questions);
         parsed = raw.questions || (Array.isArray(raw) ? raw : [raw]);
       } catch {
-        return { content: [{ type: 'text', text: 'âŒ Invalid JSON. Make sure you pass the full JSON string from the generate step.' }] };
+        return { content: [{ type: 'text', text: '❌ Invalid JSON. Make sure you pass the full JSON string from the generate step.' }] };
       }
 
       let saved = false;
@@ -219,19 +234,19 @@ After generating the JSON, call **friday.save_questions** with jobId="${jobId}",
         const resp = await fetch(`${QUESTAI_URL}/api/mcp/save`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-mcp-secret': MCP_SECRET },
-          body: JSON.stringify({ jobId, questions: parsed, topic, type, track, course, client, difficulty, userId, mcpToken })
+          body: JSON.stringify({ jobId, questions: parsed, topic, type, track, course, client, difficulty, userId: sessionUserId })
         });
         saved = resp.ok;
       } catch { /* server might not be running */ }
 
-      await notifyFrontend(jobId, topic || 'Questions', type, parsed.length, track, client, course, 'done', userId, mcpToken);
+      await notifyFrontend(jobId, topic || 'Questions', type, parsed.length, track, client, course, 'done', sessionUserId);
 
       return {
         content: [{
           type: 'text',
           text: [
-            `âœ… ${parsed.length} questions saved to F.R.I.D.A.Y`,
-            saved ? `ðŸ“‚ Open Content Bank â†’ ${QUESTAI_URL}` : `âš ï¸ F.R.I.D.A.Y server not running â€” questions saved in session only`,
+            `✅ ${parsed.length} questions saved to F.R.I.D.A.Y`,
+            saved ? `📂 Open Content Bank → ${QUESTAI_URL}` : `⚠️ F.R.I.D.A.Y server not running — questions saved in session only`,
             '',
             'Summary:',
             ...parsed.slice(0, 5).map((q, i) =>
@@ -246,7 +261,7 @@ After generating the JSON, call **friday.save_questions** with jobId="${jobId}",
     }
   );
 
-  // â”€â”€ Tool: generate_planner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Tool: generate_planner ─────────────────────────────────────────────────
   s.tool(
     'generate_planner',
     'Prepares a structured generation prompt for Claude to create a full content planner (weekly question sets). Attach the Excel planner file to this chat first, then call this tool.',
@@ -258,29 +273,27 @@ After generating the JSON, call **friday.save_questions** with jobId="${jobId}",
       skillBuilderCount:      z.number().int().min(1).max(5).default(3),
       practiceAtHomeCount:    z.number().int().min(1).max(5).default(3),
       challengeYourselfCount: z.number().int().min(1).max(5).default(2),
-      userId:                 z.string().optional().describe('F.R.I.D.A.Y user ID for per-user job isolation (pass exactly as provided in the prompt)'),
-    mcpToken:               z.string().optional().describe('F.R.I.D.A.Y user auth token — copy exactly from your MCP prompt, do not modify'),
     },
-    async ({ courseName, track, client, weeks, skillBuilderCount, practiceAtHomeCount, challengeYourselfCount, userId, mcpToken }) => {
+    async ({ courseName, track, client, weeks, skillBuilderCount, practiceAtHomeCount, challengeYourselfCount }) => {
       let parsedWeeks;
       try { parsedWeeks = JSON.parse(weeks); } catch {
-        return { content: [{ type: 'text', text: 'âŒ Invalid weeks JSON. Pass a valid JSON array of {weekNumber, topic, subtopics[]}.' }] };
+        return { content: [{ type: 'text', text: '❌ Invalid weeks JSON. Pass a valid JSON array of {weekNumber, topic, subtopics[]}.' }] };
       }
       const jobId = `mcp-planner-${Date.now()}`;
-      await notifyFrontend(jobId, courseName, 'planner', parsedWeeks.length, track, client, '', 'running', userId, mcpToken);
+      await notifyFrontend(jobId, courseName, 'planner', parsedWeeks.length, track, client, '', 'running', sessionUserId);
 
       const totalPerWeek = skillBuilderCount + practiceAtHomeCount + challengeYourselfCount;
 
       return {
         content: [{
           type: 'text',
-          text: `[F.R.I.D.A.Y Planner overlay started â€” ${QUESTAI_URL}]
+          text: `[F.R.I.D.A.Y Planner overlay started — ${QUESTAI_URL}]
 Job ID: ${jobId}
 
-Generate a complete content planner for **"${courseName}"** (${track} Â· ${client}).
-${parsedWeeks.length} weeks Â· ${totalPerWeek} questions/week (${skillBuilderCount} Easy + ${practiceAtHomeCount} Medium + ${challengeYourselfCount} Hard).
+Generate a complete content planner for **"${courseName}"** (${track} · ${client}).
+${parsedWeeks.length} weeks · ${totalPerWeek} questions/week (${skillBuilderCount} Easy + ${practiceAtHomeCount} Medium + ${challengeYourselfCount} Hard).
 
-**Output ONLY this JSON â€” no markdown fences, no preamble:**
+**Output ONLY this JSON — no markdown fences, no preamble:**
 {
   "weeks": [
     {
@@ -296,7 +309,7 @@ ${parsedWeeks.length} weeks Â· ${totalPerWeek} questions/week (${skillBuilderC
             "tags": ["tag1"],
             "inputFormat": "...", "outputFormat": "...",
             "sampleInput": "...", "sampleOutput": "...",
-            "constraints": "1 â‰¤ N â‰¤ 10^5",
+            "constraints": "1 ≤ N ≤ 10^5",
             "solutions": { "java": "// complete program", "python": "# complete", "cpp": "// complete", "c": "// complete" }
           }
         ]
@@ -317,13 +330,13 @@ Rules:
 Weeks to generate (${parsedWeeks.length} total):
 ${parsedWeeks.map(w => `  Week ${w.weekNumber}: ${w.topic}${w.subtopics?.length ? ` | ${w.subtopics.slice(0,4).join(', ')}` : ''}`).join('\n')}
 
-After generating the complete JSON, call **friday.save_planner** with jobId="${jobId}", courseName="${courseName}", track="${track}", client="${client}"${userId ? `, userId="${userId}"` : ''}${mcpToken ? `, mcpToken="${mcpToken}"` : ''}, and the full planner JSON string.`
+After generating the complete JSON, call **friday.save_planner** with jobId="${jobId}", courseName="${courseName}", track="${track}", client="${client}", and the full planner JSON string.`
         }]
       };
     }
   );
 
-  // â”€â”€ Tool: save_planner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Tool: save_planner ─────────────────────────────────────────────────────
   s.tool(
     'save_planner',
     'Saves Claude-generated content planner to F.R.I.D.A.Y and closes the generation overlay. Call this after generating the full planner JSON from generate_planner.',
@@ -333,13 +346,11 @@ After generating the complete JSON, call **friday.save_planner** with jobId="${j
       courseName: z.string().optional(),
       track:      z.string().default('DSA'),
       client:     z.string().default('General'),
-      userId:     z.string().optional().describe('F.R.I.D.A.Y user ID for per-user job isolation'),
-    mcpToken:   z.string().optional().describe('F.R.I.D.A.Y user auth token — copy exactly from your MCP prompt, do not modify'),
     },
-    async ({ jobId, planner, courseName, track, client, userId, mcpToken }) => {
+    async ({ jobId, planner, courseName, track, client }) => {
       let parsed;
       try { parsed = JSON.parse(planner); } catch {
-        return { content: [{ type: 'text', text: 'âŒ Invalid JSON. Pass the full planner JSON string from the generate step.' }] };
+        return { content: [{ type: 'text', text: '❌ Invalid JSON. Pass the full planner JSON string from the generate step.' }] };
       }
       const weeks = parsed.weeks || (Array.isArray(parsed) ? parsed : []);
       const totalQ = weeks.reduce((s, w) =>
@@ -350,38 +361,38 @@ After generating the complete JSON, call **friday.save_planner** with jobId="${j
         const resp = await fetch(`${QUESTAI_URL}/api/mcp/save-planner`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-mcp-secret': MCP_SECRET },
-          body: JSON.stringify({ jobId, courseName, track, client, weeks, userId, mcpToken })
+          body: JSON.stringify({ jobId, courseName, track, client, weeks, userId: sessionUserId })
         });
         saved = resp.ok;
       } catch { /* server might not be running */ }
 
-      await notifyFrontend(jobId, courseName || 'Planner', 'planner', weeks.length, track, client, '', 'done', userId, mcpToken);
+      await notifyFrontend(jobId, courseName || 'Planner', 'planner', weeks.length, track, client, '', 'done', sessionUserId);
 
       return {
         content: [{
           type: 'text',
           text: [
-            `âœ… ${weeks.length}-week planner saved to F.R.I.D.A.Y (${totalQ} questions total)`,
-            saved ? `ðŸ“‚ Open Content Planner â†’ ${QUESTAI_URL}` : `âš ï¸ F.R.I.D.A.Y server not running â€” saved in session only`,
+            `✅ ${weeks.length}-week planner saved to F.R.I.D.A.Y (${totalQ} questions total)`,
+            saved ? `📂 Open Content Planner → ${QUESTAI_URL}` : `⚠️ F.R.I.D.A.Y server not running — saved in session only`,
             '',
             'Summary:',
             ...weeks.slice(0, 6).map(w => {
               const q = ['skillBuilder','practiceAtHome','challengeYourself'].reduce((s, k) => s + (w[k]?.questions?.length || 0), 0);
               return `  Week ${w.weekNumber}: ${w.topic} (${q}Q)`;
             }),
-            weeks.length > 6 ? `  â€¦ and ${weeks.length - 6} more weeks` : ''
+            weeks.length > 6 ? `  … and ${weeks.length - 6} more weeks` : ''
           ].filter(Boolean).join('\n')
         }]
       };
     }
   );
 
-  // â”€â”€ Tool: list_tracks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Tool: list_tracks ──────────────────────────────────────────────────────
   s.tool('list_tracks', 'List all F.R.I.D.A.Y technology tracks.', {}, async () => ({
     content: [{ type: 'text', text: '# F.R.I.D.A.Y Tracks\n\n' + TVA_TRACKS.map((t,i) => `${i+1}. ${t}`).join('\n') }]
   }));
 
-  // â”€â”€ Tool: list_clients â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Tool: list_clients ─────────────────────────────────────────────────────
   s.tool('list_clients', 'List all F.R.I.D.A.Y TVA clients.', {}, async () => ({
     content: [{ type: 'text', text: '# F.R.I.D.A.Y Clients\n\n' + TVA_CLIENTS.map((c,i) => `${i+1}. ${c}`).join('\n') }]
   }));
@@ -389,12 +400,10 @@ After generating the complete JSON, call **friday.save_planner** with jobId="${j
   return s;
 }
 
-// â”€â”€ OAuth 2.0 in-memory stores â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const oauthClients = new Map();   // clientId â†’ { redirectUris }
-const oauthCodes   = new Map();   // code     â†’ { clientId, redirectUri, codeChallenge, expiresAt }
-const oauthTokens  = new Map();   // token    â†’ { clientId, createdAt }
-
-const MCP_SERVER_URL = process.env.MCP_SERVER_URL || 'https://questai-mcp.onrender.com';
+// ── OAuth 2.0 in-memory stores ────────────────────────────────────────────────
+const oauthClients = new Map();   // clientId → { redirectUris }
+const oauthCodes   = new Map();   // code     → { clientId, redirectUri, codeChallenge, expiresAt }
+const oauthTokens  = new Map();   // token    → { clientId, createdAt }
 
 const readBody = (req) => new Promise((resolve, reject) => {
   let data = '';
@@ -403,14 +412,13 @@ const readBody = (req) => new Promise((resolve, reject) => {
   req.on('error', reject);
 });
 
-// â”€â”€ Connect â€” stdio (Claude Code tab) or HTTP (Claude.ai web) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Connect — stdio (Claude Code tab) or HTTP (Claude.ai web) ────────────────
 const HTTP_PORT = parseInt(process.env.MCP_HTTP_PORT || process.env.PORT || '0');
 
 if (HTTP_PORT) {
-  // sessionId â†’ { transport: StreamableHTTPServerTransport, createdAt: number }
+  // sessionId → { transport, userId, createdAt }
   const sessions = new Map();
 
-  // Prune sessions older than 1 hour every 10 minutes
   setInterval(() => {
     const cutoff = Date.now() - 3_600_000;
     for (const [id, { createdAt }] of sessions) {
@@ -420,50 +428,53 @@ if (HTTP_PORT) {
 
   const httpServer = http.createServer(async (req, res) => {
     const url = new URL(req.url, MCP_SERVER_URL);
+    const { userId: sessionUserId, urlToken, effectivePath } = extractUrlToken(url.pathname);
 
-    // CORS â€” required for browser-based Claude.ai calls
+    // CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, mcp-session-id');
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
     // Health check
-    if (req.method === 'GET' && url.pathname === '/health') {
+    if (req.method === 'GET' && (effectivePath === '/health' || url.pathname === '/health')) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ ok: true, service: 'friday-mcp', version: '3.0.0', sessions: sessions.size }));
+      res.end(JSON.stringify({ ok: true, service: 'friday-mcp', version: '3.1.0', sessions: sessions.size }));
       return;
     }
 
-    // â”€â”€ OAuth metadata discovery â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    if (req.method === 'GET' && url.pathname === '/.well-known/oauth-authorization-server') {
+    // ── OAuth metadata discovery ───────────────────────────────────────────
+    if (req.method === 'GET' && effectivePath === '/.well-known/oauth-authorization-server') {
+      // Return endpoints scoped to this user's URL prefix (preserves userId through OAuth flow)
+      const baseUrl = urlToken ? `${MCP_SERVER_URL}/u/${urlToken}` : MCP_SERVER_URL;
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
-        issuer: MCP_SERVER_URL,
-        authorization_endpoint: `${MCP_SERVER_URL}/oauth/authorize`,
-        token_endpoint:         `${MCP_SERVER_URL}/oauth/token`,
-        registration_endpoint:  `${MCP_SERVER_URL}/oauth/register`,
-        response_types_supported:            ['code'],
-        grant_types_supported:               ['authorization_code'],
-        code_challenge_methods_supported:    ['S256'],
+        issuer:                                baseUrl,
+        authorization_endpoint:                `${baseUrl}/oauth/authorize`,
+        token_endpoint:                        `${baseUrl}/oauth/token`,
+        registration_endpoint:                 `${baseUrl}/oauth/register`,
+        response_types_supported:              ['code'],
+        grant_types_supported:                 ['authorization_code'],
+        code_challenge_methods_supported:      ['S256'],
         token_endpoint_auth_methods_supported: ['none']
       }));
       return;
     }
 
-    // â”€â”€ Dynamic Client Registration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    if (req.method === 'POST' && url.pathname === '/oauth/register') {
+    // ── Dynamic Client Registration ────────────────────────────────────────
+    if (req.method === 'POST' && effectivePath === '/oauth/register') {
       try {
         const body = JSON.parse(await readBody(req));
         const clientId = `qai_${crypto.randomUUID().replace(/-/g, '')}`;
         oauthClients.set(clientId, { redirectUris: body.redirect_uris || [] });
         res.writeHead(201, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
-          client_id:                   clientId,
-          client_name:                 body.client_name || 'Claude',
-          redirect_uris:               body.redirect_uris || [],
-          token_endpoint_auth_method:  'none',
-          grant_types:                 ['authorization_code'],
-          response_types:              ['code']
+          client_id:                  clientId,
+          client_name:                body.client_name || 'Claude',
+          redirect_uris:              body.redirect_uris || [],
+          token_endpoint_auth_method: 'none',
+          grant_types:                ['authorization_code'],
+          response_types:             ['code']
         }));
       } catch {
         res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -472,8 +483,8 @@ if (HTTP_PORT) {
       return;
     }
 
-    // â”€â”€ Authorization endpoint â€” auto-approve â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    if (req.method === 'GET' && url.pathname === '/oauth/authorize') {
+    // ── Authorization endpoint — auto-approve ──────────────────────────────
+    if (req.method === 'GET' && effectivePath === '/oauth/authorize') {
       const clientId      = url.searchParams.get('client_id');
       const redirectUri   = url.searchParams.get('redirect_uri');
       const state         = url.searchParams.get('state');
@@ -488,8 +499,8 @@ if (HTTP_PORT) {
       return;
     }
 
-    // â”€â”€ Token endpoint â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    if (req.method === 'POST' && url.pathname === '/oauth/token') {
+    // ── Token endpoint ─────────────────────────────────────────────────────
+    if (req.method === 'POST' && effectivePath === '/oauth/token') {
       try {
         const raw    = await readBody(req);
         const params = raw.startsWith('{') ? JSON.parse(raw) : Object.fromEntries(new URLSearchParams(raw));
@@ -512,27 +523,28 @@ if (HTTP_PORT) {
       return;
     }
 
-    // â”€â”€ MCP requests â€” require valid OAuth Bearer token â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── MCP requests — require valid OAuth Bearer token ────────────────────
     const authHeader  = req.headers['authorization'] || '';
     const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
     if (!bearerToken || !oauthTokens.has(bearerToken)) {
       res.writeHead(401, {
-        'Content-Type':    'application/json',
+        'Content-Type':     'application/json',
         'WWW-Authenticate': 'Bearer realm="F.R.I.D.A.Y MCP"'
       });
       res.end(JSON.stringify({ error: 'Unauthorized' }));
       return;
     }
 
-    // â”€â”€ Session routing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Session routing ────────────────────────────────────────────────────
     const sessionId = req.headers['mcp-session-id'];
 
     if (sessionId && sessions.has(sessionId)) {
-      // Reuse existing transport for this session
       const { transport } = sessions.get(sessionId);
+      // Strip /u/{token} prefix so transport sees the clean path
+      if (urlToken) req.url = effectivePath + (url.search || '');
       try {
         await transport.handleRequest(req, res);
-      } catch (err) {
+      } catch {
         if (!res.headersSent) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'session_error' }));
@@ -542,21 +554,23 @@ if (HTTP_PORT) {
       return;
     }
 
-    // â”€â”€ New session â€” create fresh server + transport pair â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── New session — build server with userId from URL token ──────────────
     const transport = new StreamableHTTPServerTransport({ sessionIdHeader: 'mcp-session-id' });
-    const mcpServer = buildServer();
+    const mcpServer = buildServer(sessionUserId);
 
-    // Save session BEFORE handleRequest so later requests can find it
     if (transport.sessionId) {
-      sessions.set(transport.sessionId, { transport, createdAt: Date.now() });
+      sessions.set(transport.sessionId, { transport, userId: sessionUserId, createdAt: Date.now() });
       transport.onclose = () => sessions.delete(transport.sessionId);
     }
 
     await mcpServer.connect(transport);
 
+    // Strip /u/{token} prefix so transport sees the clean path
+    if (urlToken) req.url = effectivePath + (url.search || '');
+
     try {
       await transport.handleRequest(req, res);
-    } catch (err) {
+    } catch {
       if (!res.headersSent) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'mcp_error' }));
@@ -567,13 +581,13 @@ if (HTTP_PORT) {
 
   httpServer.listen(HTTP_PORT, () => {
     console.error(`[F.R.I.D.A.Y MCP] HTTP server listening on port ${HTTP_PORT}`);
-    console.error(`[F.R.I.D.A.Y MCP] OAuth discovery â†’ ${MCP_SERVER_URL}/.well-known/oauth-authorization-server`);
+    console.error(`[F.R.I.D.A.Y MCP] OAuth discovery → ${MCP_SERVER_URL}/.well-known/oauth-authorization-server`);
+    console.error(`[F.R.I.D.A.Y MCP] Personalized URL pattern → ${MCP_SERVER_URL}/u/{jwt-token}`);
   });
 
 } else {
-  // â”€â”€ Local stdio mode â€” used by Claude Code â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const s = buildServer();
+  // ── Local stdio mode — used by Claude Code ─────────────────────────────────
+  const s = buildServer(null);
   const transport = new StdioServerTransport();
   await s.connect(transport);
 }
-

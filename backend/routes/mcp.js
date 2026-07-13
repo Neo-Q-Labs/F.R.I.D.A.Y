@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { verifyToken } from '../middleware/auth.js';
-import { trigger, notify, save, savePlanner, statusAll, statusById, getUserToken } from '../controllers/mcpController.js';
+import { trigger, notify, save, savePlanner, statusAll, statusById, getUserToken, getMcpServerUrl } from '../controllers/mcpController.js';
 
 const router = Router();
 router.get('/token',          verifyToken, getUserToken);
+router.get('/server-url',     verifyToken, getMcpServerUrl);
 router.post('/trigger',       trigger);
 router.post('/notify',        notify);
 router.post('/save',          save);
