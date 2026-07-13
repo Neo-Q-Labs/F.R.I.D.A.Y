@@ -643,13 +643,18 @@ TECHNICAL NOTES:
         // Active or recently completed job
         setMcpJob(data);
         if (data.status === 'running') {
-          // Only show overlay if user hasn't deliberately backgrounded it
           if (!mcpBackgrounded) setMcpOverlay(true);
         }
-        if (data.status === 'done' && (mcpOverlay || mcpBackgrounded) && !mcpDoneHandledRef.current) {
-          mcpDoneHandledRef.current = true; // prevent re-entry on next poll tick
+
+        if (data.status === 'done' && !mcpDoneHandledRef.current) {
+          mcpDoneHandledRef.current = true;
+
+          if (!mcpBackgrounded) {
+            // Always surface the overlay so the user sees the completion state
+            setMcpOverlay(true);
+          }
+
           if (data.type === 'planner') {
-            // Re-save planner with authenticated userId
             if (data.result && Array.isArray(data.result) && data.result.length > 0) {
               try {
                 await apiFetch('/api/planners', {
@@ -663,13 +668,13 @@ TECHNICAL NOTES:
                 });
               } catch { /* ignore */ }
             }
-            if (mcpOverlay) {
+            if (!mcpBackgrounded) {
               setTimeout(() => {
                 setMcpOverlay(false);
                 setMcpJob(null);
                 mcpDoneHandledRef.current = false;
                 showPage('planner');
-              }, 3000);
+              }, 2500);
             } else {
               setMcpJob(null);
               setMcpBackgrounded(false);
@@ -677,21 +682,20 @@ TECHNICAL NOTES:
               setMcpDoneNotif({ type: 'planner', topic: data.topic, track: data.track, course: data.course });
             }
           } else {
-            // mcp/save already persisted questions with userId; just refresh history
             await fetchHistory();
             const jTrack  = data.track;
             const jCourse = data.course;
             const jCat    = getCategoryForTrack(jTrack);
-            if (mcpOverlay) {
+            if (!mcpBackgrounded) {
+              if (jCat)    setContentBankCategory(jCat);
+              if (jTrack)  setContentBankTrack(jTrack);
+              if (jCourse) setContentBankCourse(jCourse);
               setTimeout(() => {
                 setMcpOverlay(false);
                 setMcpJob(null);
                 mcpDoneHandledRef.current = false;
-                if (jCat)    setContentBankCategory(jCat);
-                if (jTrack)  setContentBankTrack(jTrack);
-                if (jCourse) setContentBankCourse(jCourse);
                 showPage('contentbank');
-              }, 3000);
+              }, 2500);
             } else {
               setMcpJob(null);
               setMcpBackgrounded(false);
@@ -703,17 +707,14 @@ TECHNICAL NOTES:
             }
           }
         }
-        if (data.status === 'error' && (mcpOverlay || mcpBackgrounded)) {
-          if (mcpOverlay) {
-            setTimeout(() => {
-              setMcpOverlay(false);
-              setMcpJob(null);
-            }, 4000);
-          } else {
-            setMcpBackgrounded(false);
+
+        if (data.status === 'error') {
+          setTimeout(() => {
+            setMcpOverlay(false);
             setMcpJob(null);
+            setMcpBackgrounded(false);
             showToast('MCP generation failed', true);
-          }
+          }, 3000);
         }
       } catch {
         // Ignore poll errors silently
