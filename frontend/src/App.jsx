@@ -635,13 +635,16 @@ TECHNICAL NOTES:
   // ── MCP job polling — detects when Claude triggers generation via MCP ─────────
   useEffect(() => {
     const pollMcp = async () => {
-      if (!isLoggedIn) return; // don't poll or mutate state for unauthenticated sessions
+      if (!isLoggedIn) return;
+      // Stop polling as soon as there is no active generation to track.
+      // This prevents the done handler from re-firing after redirect because
+      // the backend mcpJobs Map still holds the completed job.
+      if (!mcpJob && !mcpOverlay && !mcpBackgrounded) return;
       try {
         const resp = await apiFetch('/api/mcp/status');
         if (!resp.ok) return;
         const data = await resp.json();
         if (data.status === 'idle') {
-          // If we were showing the overlay and job is now gone, clear it
           if (mcpOverlay && mcpJob && (Date.now() - (mcpJob.startedAt || 0)) > 5000) {
             setMcpOverlay(false);
           }
@@ -650,6 +653,9 @@ TECHNICAL NOTES:
         // Active or recently completed job
         setMcpJob(data);
         if (data.status === 'running') {
+          // Reset the handled flag when a NEW generation starts so the
+          // done handler can fire for it (ref stays true between generations).
+          mcpDoneHandledRef.current = false;
           if (!mcpBackgrounded) setMcpOverlay(true);
         }
 
@@ -657,7 +663,6 @@ TECHNICAL NOTES:
           mcpDoneHandledRef.current = true;
 
           if (!mcpBackgrounded) {
-            // Always surface the overlay so the user sees the completion state
             setMcpOverlay(true);
           }
 
@@ -679,13 +684,11 @@ TECHNICAL NOTES:
               setTimeout(() => {
                 setMcpOverlay(false);
                 setMcpJob(null);
-                mcpDoneHandledRef.current = false;
                 showPage('planner');
               }, 2500);
             } else {
               setMcpJob(null);
               setMcpBackgrounded(false);
-              mcpDoneHandledRef.current = false;
               setMcpDoneNotif({ type: 'planner', topic: data.topic, track: data.track, course: data.course });
             }
           } else {
@@ -700,13 +703,11 @@ TECHNICAL NOTES:
               setTimeout(() => {
                 setMcpOverlay(false);
                 setMcpJob(null);
-                mcpDoneHandledRef.current = false;
                 showPage('contentbank');
               }, 2500);
             } else {
               setMcpJob(null);
               setMcpBackgrounded(false);
-              mcpDoneHandledRef.current = false;
               if (jCat)    setContentBankCategory(jCat);
               if (jTrack)  setContentBankTrack(jTrack);
               if (jCourse) setContentBankCourse(jCourse);
