@@ -25,6 +25,26 @@ function checkSecret(req, res) {
 
 // Resolve userId: verify the signed mcpToken JWT (stateless, no server storage needed),
 // then fall back to the raw userId string the LLM may have passed.
+// Normalize MCQ questions: Claude returns options as {A,B,C,D} object + answer letter.
+// The frontend expects an array + 0-indexed correctAnswer.
+function normalizeMcqQuestions(questions, type) {
+  if (type !== 'mcq') return questions;
+  const letters = ['A', 'B', 'C', 'D'];
+  return questions.map(q => {
+    let options = q.options;
+    let correctAnswer = q.correctAnswer;
+    if (options && !Array.isArray(options) && typeof options === 'object') {
+      options = letters.map(l => options[l] ?? '');
+    }
+    if (typeof correctAnswer !== 'number' && q.answer) {
+      correctAnswer = letters.indexOf(q.answer.toUpperCase());
+      if (correctAnswer < 0) correctAnswer = 0;
+    }
+    const { answer, ...rest } = q;
+    return { ...rest, options, correctAnswer };
+  });
+}
+
 function resolveUserId(mcpToken, fallbackUserId) {
   if (mcpToken) {
     try {
@@ -127,11 +147,12 @@ export const notify = (req, res) => {
 
 export const save = async (req, res) => {
   if (!checkSecret(req, res)) return;
-  const { jobId, questions, topic, type, track, client, course, difficulty, userId, mcpToken } = req.body;
-  if (!questions || !Array.isArray(questions)) return res.status(400).json({ error: 'questions array required' });
+  const { jobId, questions: rawQuestions, topic, type, track, client, course, difficulty, userId, mcpToken } = req.body;
+  if (!rawQuestions || !Array.isArray(rawQuestions)) return res.status(400).json({ error: 'questions array required' });
 
+  const questions = normalizeMcqQuestions(rawQuestions, type);
   const resolvedUserId = resolveUserId(mcpToken, userId);
-  console.log(`[MCP save] jobId=${jobId} questions=${questions.length} userId=${resolvedUserId || '(none)'} mcpToken=${mcpToken ? 'present' : 'absent'}`);
+  console.log(`[MCP save] jobId=${jobId} questions=${questions.length} userId=${resolvedUserId || '(none)'}`);
 
   if (mcpJobs.has(jobId)) {
     const job = mcpJobs.get(jobId);

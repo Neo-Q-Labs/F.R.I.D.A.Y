@@ -1,18 +1,33 @@
 import * as XLSX from 'xlsx';
 
+const toOptsArray = (opts) => {
+  if (!opts) return [];
+  if (Array.isArray(opts)) return opts;
+  return ['A', 'B', 'C', 'D'].map(l => opts[l] ?? '');
+};
+const toCorrectIdx = (ca, ans) => {
+  if (typeof ca === 'number' && ca >= 0) return ca;
+  if (typeof ans === 'string') { const i = ['A','B','C','D'].indexOf(ans.toUpperCase()); return i >= 0 ? i : 0; }
+  return 0;
+};
+
 export function downloadMCQsAsExcel(questions, topic) {
-  const data = questions.map((q, idx) => ({
+  const data = questions.map((q, idx) => {
+    const opts = toOptsArray(q.options);
+    const ca = toCorrectIdx(q.correctAnswer, q.answer);
+    return {
     'Question No': idx + 1,
     'Topic': topic,
     'Question': q.question,
-    'Option A': q.options?.[0] ?? '',
-    'Option B': q.options?.[1] ?? '',
-    'Option C': q.options?.[2] ?? '',
-    'Option D': q.options?.[3] ?? '',
-    'Correct Answer': String.fromCharCode(65 + q.correctAnswer),
+    'Option A': opts[0] ?? '',
+    'Option B': opts[1] ?? '',
+    'Option C': opts[2] ?? '',
+    'Option D': opts[3] ?? '',
+    'Correct Answer': String.fromCharCode(65 + ca),
     'Explanation': q.explanation,
     'Recommended For': q.recommendedFor
-  }));
+  };
+  });
 
   const worksheet = XLSX.utils.json_to_sheet(data);
   const workbook = XLSX.utils.book_new();

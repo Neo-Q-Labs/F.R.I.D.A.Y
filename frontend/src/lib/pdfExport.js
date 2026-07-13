@@ -325,19 +325,30 @@ export async function downloadQuestionsAsPDF(questions, options = {}) {
       }
 
       // Render Options Formats [A], [B], [C], [D]
-      let opts = q.options || [];
-      if ((!opts || opts.length === 0) && q.questions && q.questions[0]) {
-        opts = q.questions[0].options || [];
+      const _pdfNormOpts = (raw) => {
+        if (!raw) return [];
+        if (Array.isArray(raw)) return raw;
+        return ['A','B','C','D'].map(l => raw[l] ?? '');
+      };
+      const _pdfNormCA = (ca, ans) => {
+        if (typeof ca === 'number' && ca >= 0) return ca;
+        if (typeof ans === 'string') { const i = ['A','B','C','D'].indexOf(ans.toUpperCase()); return i >= 0 ? i : 0; }
+        return 0;
+      };
+      let opts = _pdfNormOpts(q.options);
+      if (opts.length === 0 && q.questions && q.questions[0]) {
+        opts = _pdfNormOpts(q.questions[0].options);
       }
+      const qCorrectAnswer = _pdfNormCA(q.correctAnswer, q.answer);
 
       if (opts && opts.length >= 4) {
         checkPageOverflow(doc, 22);
         y = addWrappedText(doc, 'SELECT FROM OPTIONS:', marginX + 6, 'Helvetica', 'bold', 8.5, [71, 85, 105], 4);
-        
+
         opts.forEach((opt, oIdx) => {
           checkPageOverflow(doc, 8);
           const letter = String.fromCharCode(65 + oIdx);
-          const isCorrect = oIdx === q.correctAnswer || (q.questions && oIdx === q.questions[0]?.correctAnswer);
+          const isCorrect = oIdx === qCorrectAnswer || (q.questions && oIdx === _pdfNormCA(q.questions[0]?.correctAnswer, q.questions[0]?.answer));
           const blockColor = isCorrect ? [16, 185, 129] : [51, 65, 85];
           const textFormat = isCorrect ? 'bold' : 'normal';
 

@@ -15,13 +15,31 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
+// Normalize MCQ options — MCP generates {A,B,C,D} object; frontend expects array.
+const toOptionsArray = (opts) => {
+  if (!opts) return [];
+  if (Array.isArray(opts)) return opts;
+  return ['A', 'B', 'C', 'D'].map(l => opts[l] ?? '');
+};
+const toCorrectAnswerIdx = (ca, ans) => {
+  if (typeof ca === 'number' && ca >= 0) return ca;
+  if (typeof ans === 'string') {
+    const idx = ['A', 'B', 'C', 'D'].indexOf(ans.toUpperCase());
+    return idx >= 0 ? idx : 0;
+  }
+  return 0;
+};
+
 export function MCQCard({ mcq, index }) {
   const [selectedOption, setSelectedOption] = useState(null);
   const [showExplanation, setShowExplanation] = useState(false);
 
+  const normalizedOptions = toOptionsArray(mcq.options);
+  const correctAnswerIdx = toCorrectAnswerIdx(mcq.correctAnswer, mcq.answer);
+
   const [isEditing, setIsEditing] = useState(false);
   const [editedQuestion, setEditedQuestion] = useState(mcq.question);
-  const [editedOptions, setEditedOptions] = useState([...(mcq.options || [])]);
+  const [editedOptions, setEditedOptions] = useState(normalizedOptions);
   const [editedExplanation, setEditedExplanation] = useState(mcq.explanation);
   const [editedRecommendedFor, setEditedRecommendedFor] = useState(mcq.recommendedFor);
   const [isCopyingMcq, setIsCopyingMcq] = useState(false);
@@ -37,7 +55,7 @@ export function MCQCard({ mcq, index }) {
     editedOptions.forEach((option, idx) => {
       textToCopy += `${String.fromCharCode(65 + idx)}) ${option}\n`;
     });
-    textToCopy += `\nCorrect Answer: ${String.fromCharCode(65 + mcq.correctAnswer)}\n`;
+    textToCopy += `\nCorrect Answer: ${String.fromCharCode(65 + correctAnswerIdx)}\n`;
     textToCopy += `\nRecommended For: ${editedRecommendedFor}\n`;
     textToCopy += `\nExplanation:\n${editedExplanation}`;
     navigator.clipboard.writeText(textToCopy);
@@ -45,7 +63,7 @@ export function MCQCard({ mcq, index }) {
     setTimeout(() => setIsCopyingMcq(false), 2000);
   };
 
-  const isCorrect = selectedOption === mcq.correctAnswer;
+  const isCorrect = selectedOption === correctAnswerIdx;
 
   return (
     <motion.div
@@ -146,9 +164,9 @@ export function MCQCard({ mcq, index }) {
         )}
 
         <div className="space-y-4">
-          {mcq.options?.map((option, optIdx) => {
+          {normalizedOptions.map((option, optIdx) => {
             const isOptionSelected = selectedOption === optIdx;
-            const isOptionCorrect = mcq.correctAnswer === optIdx;
+            const isOptionCorrect = correctAnswerIdx === optIdx;
             
             let stateStyle = "glass-panel bg-white/5 text-foreground/60 border-white/5 hover:bg-white/10 hover:text-foreground hover:scale-[1.01] hover:translate-x-2";
             
